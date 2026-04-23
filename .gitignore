@@ -1,0 +1,22 @@
+# Quartz (SSG repo, not versioned)
+quartz/
+
+# Node
+node_modules/
+npm-debug.log
+.npm
+
+# Raw sources (keep only index)
+raw_source/*
+!raw_source/index.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
