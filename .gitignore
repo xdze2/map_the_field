@@ -3,6 +3,8 @@ quartz/
 venv
 data/
 
+*.pyc
+
 # Node
 node_modules/
 npm-debug.log

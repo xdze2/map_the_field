@@ -1,37 +1,16 @@
 #!/usr/bin/env python3
 import click
 import json
-import time
 from pathlib import Path
 from datetime import datetime
 from ddgs import DDGS
-import re
+from utils import slugify, is_directory
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
 SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
-
-# Known directory/annuaire domains to filter out
-DIRECTORY_BLACKLIST = {
-    "societe.com",
-    "verif.com",
-    "sirene.data.gouv.fr",
-    "infogreffe.fr",
-    "pagesjaunes.fr",
-    "kompass.com",
-    "europages.fr",
-    "viadeo.com",
-    "linkedin.com",
-    "pappers.fr",
-    "lefigaro.fr",
-    "infonet.fr",
-    "lagazettefrance.fr",
-    "hoodspot.fr",
-    "eterritoire.fr",
-    "gouv.fr",
-}
 
 
 def find_company_in_local_data(siren: str) -> dict:
@@ -63,13 +42,6 @@ def find_company_in_local_data(siren: str) -> dict:
     )
 
 
-def slugify(text: str) -> str:
-    """Convert company name to URL-friendly slug."""
-    slug = re.sub(r"[^\w\s-]", "", text.lower())
-    slug = re.sub(r"[-\s]+", "-", slug)
-    return slug.strip("-")
-
-
 def build_search_query(company_name: str, postal_code: str) -> str:
     """Build DuckDuckGo search query."""
     # Include postal code for geographic context
@@ -77,73 +49,42 @@ def build_search_query(company_name: str, postal_code: str) -> str:
     return query
 
 
-def search_company_website(query: str) -> dict:
-    """Search for company website using DuckDuckGo. Returns dict with results and query metadata."""
+def search_company_website(query: str, max_results: int = 25, region: str = "fr-fr") -> list:
+    """Search for company website using DuckDuckGo."""
     try:
-        max_results = 25
-        region = "fr-fr"
         results = DDGS().text(query, max_results=max_results, region=region)
-        return {
-            "results": results if results else [],
-            "query": query,
-            "region": region,
-            "max_results": max_results,
-        }
+        return results if results else []
     except Exception as e:
         raise click.ClickException(f"Search failed: {e}")
 
 
-def is_directory(url: str) -> bool:
-    """Check if URL is a known directory/annuaire domain."""
-    for domain in DIRECTORY_BLACKLIST:
-        if domain in url.lower():
-            return True
-    return False
+def build_result_dict(result: dict, exclusion_reason: str = None) -> dict:
+    """Build standardized result dict from raw search result."""
+    data = {
+        "url": result.get("href", ""),
+        "title": result.get("title", ""),
+        "snippet": result.get("body", ""),
+    }
+    if exclusion_reason:
+        data["exclusion_reason"] = exclusion_reason
+    return data
 
 
 def filter_results(results: list) -> tuple:
-    """Filter results: exclude directories, return (filtered, excluded) tuples.
-
-    Returns a tuple of (filtered_results, excluded_results) where each is a list of dicts
-    with url, title, snippet, and exclusion_reason.
-    """
+    """Filter results: exclude directories, return (filtered, excluded) tuples."""
     filtered = []
     excluded = []
 
     for result in results:
-        url = result.get("href", "")
-        title = result.get("title", "")
-        body = result.get("body", "")
-
-        if is_directory(url):
-            excluded.append(
-                {
-                    "url": url,
-                    "title": title,
-                    "snippet": body,
-                    "exclusion_reason": "blacklisted_directory",
-                }
-            )
+        if is_directory(result.get("href", "")):
+            excluded.append(build_result_dict(result, "blacklisted_directory"))
         else:
-            filtered.append(
-                {
-                    "url": url,
-                    "title": title,
-                    "snippet": body,
-                }
-            )
+            filtered.append(build_result_dict(result))
 
     return filtered, excluded
 
 
-def save_ddg_results(
-    siren: str,
-    company_name: str,
-    search_metadata: dict,
-    company_info: dict,
-    filtered_results: list,
-    excluded_results: list,
-) -> None:
+def save_ddg_results(siren: str, company_name: str, search_data: dict) -> None:
     """Save full DDG results to JSON file with metadata."""
     DDG_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
     slug = slugify(company_name)
@@ -158,22 +99,10 @@ def save_ddg_results(
         "slug": slug,
         "search_date": search_date_epoch,
         "search_date_iso": search_date_iso,
-        "company_info": company_info,
-        "ddg_query": {
-            "query": search_metadata.get("query"),
-            "region": search_metadata.get("region"),
-            "max_results": search_metadata.get("max_results"),
-        },
-        "filtering": {
-            "blacklist_domains": list(DIRECTORY_BLACKLIST),
-            "total_results": len(search_metadata.get("results", [])),
-            "filtered_results": len(filtered_results),
-            "excluded_results": len(excluded_results),
-        },
-        "results": {
-            "included": filtered_results,
-            "excluded": excluded_results,
-        },
+        "company_info": search_data["company_info"],
+        "ddg_query": search_data["ddg_query"],
+        "filtering": search_data["filtering"],
+        "results": search_data["results"],
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -182,29 +111,25 @@ def save_ddg_results(
     click.echo(f"Saved DDG results to {filepath}", err=True)
 
 
+def truncate(text: str, max_len: int = 100) -> str:
+    """Truncate text with ellipsis if longer than max_len."""
+    return text[:max_len] + "..." if len(text) > max_len else text
+
+
 def print_candidates(company_name: str, siren: str, candidates: list):
-    """Print search results in a readable format."""
+    """Print top 2 search results."""
     click.echo(f"\nSIREN: {siren}")
     click.echo(f"Company: {company_name}")
     click.echo(f"\nCandidates:\n")
 
     if not candidates:
-        click.echo("  [No non-directory results found]")
-        click.echo("  Tip: Directories may be the only option; check manually.")
+        click.echo("  [No results found]")
         return
 
     for i, candidate in enumerate(candidates[:2], 1):
-        url = candidate["url"]
-        title = candidate["title"]
-        snippet = (
-            candidate["snippet"][:100] + "..."
-            if len(candidate["snippet"]) > 100
-            else candidate["snippet"]
-        )
-
-        click.echo(f"{i}. {url}")
-        click.echo(f"   Title: {title}")
-        click.echo(f"   {snippet}")
+        click.echo(f"{i}. {candidate['url']}")
+        click.echo(f"   Title: {candidate['title']}")
+        click.echo(f"   {truncate(candidate['snippet'])}")
         click.echo()
 
 
@@ -215,21 +140,27 @@ def print_candidates(company_name: str, siren: str, candidates: list):
     is_flag=True,
     help="Show all results (including directories)",
 )
-def search(siren: str, show_all: bool):
+@click.option(
+    "--max-results",
+    type=int,
+    default=25,
+    help="Maximum number of results to fetch (default: 25)",
+)
+@click.option(
+    "--region",
+    type=str,
+    default="fr-fr",
+    help="DuckDuckGo region code (default: fr-fr)",
+)
+def search(siren: str, show_all: bool, max_results: int, region: str):
     """Search for a company website by SIREN.
 
     Looks up company in local downloads, then searches for website using postal code + company name.
     By default, filters out known directories (societe.com, etc).
 
-    Auto-saves full DDG results to /data/company_data/ddg_searches/ as JSON with metadata
-    (SIREN, company name, slug, epoch timestamp).
+    Auto-saves full DDG results to /data/company_data/ddg_searches/ as JSON with metadata.
     """
-
-    # Step 1: Find company in local data
-    try:
-        company = find_company_in_local_data(siren)
-    except click.ClickException as e:
-        raise e
+    company = find_company_in_local_data(siren)
 
     nom = company.get("nom_complet", "")
     postal_code = company.get("siege", {}).get("code_postal", "")
@@ -239,37 +170,37 @@ def search(siren: str, show_all: bool):
 
     click.echo(f"Found: {nom} ({postal_code})", err=True)
 
-    # Step 2: Build and execute search
     query = build_search_query(nom, postal_code)
     click.echo(f"Searching: {query}", err=True)
 
-    search_metadata = search_company_website(query)
-
-    if not search_metadata.get("results"):
+    raw_results = search_company_website(query, max_results=max_results, region=region)
+    if not raw_results:
         raise click.ClickException("No search results found")
 
-    # Step 3: Filter results
-    filtered_results, excluded_results = filter_results(
-        search_metadata.get("results", [])
+    filtered_results, excluded_results = filter_results(raw_results)
+
+    search_data = {
+        "company_info": company,
+        "ddg_query": {
+            "query": query,
+            "region": region,
+            "max_results": max_results,
+        },
+        "filtering": {
+            "total_results": len(raw_results),
+            "filtered_results": len(filtered_results),
+            "excluded_results": len(excluded_results),
+        },
+        "results": filtered_results,
+    }
+
+    save_ddg_results(siren, nom, search_data)
+
+    candidates = (
+        filtered_results
+        if not show_all
+        else [build_result_dict(r) for r in raw_results]
     )
-
-    # Step 4: Save full results
-    save_ddg_results(siren, nom, search_metadata, company, filtered_results, excluded_results)
-
-    # Step 5: Filter results for display
-    if show_all:
-        candidates = [
-            {
-                "url": r.get("href", ""),
-                "title": r.get("title", ""),
-                "snippet": r.get("body", ""),
-            }
-            for r in search_metadata.get("results", [])
-        ]
-    else:
-        candidates = filtered_results
-
-    # Step 5: Print results
     print_candidates(nom, siren, candidates)
 
 
