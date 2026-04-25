@@ -1,5 +1,6 @@
 # Quartz (SSG repo, not versioned)
 quartz/
+venv
 
 # Node
 node_modules/
