@@ -65,9 +65,9 @@ def find_company_in_local_data(siren: str) -> dict:
 
 def slugify(text: str) -> str:
     """Convert company name to URL-friendly slug."""
-    slug = re.sub(r'[^\w\s-]', '', text.lower())
-    slug = re.sub(r'[-\s]+', '-', slug)
-    return slug.strip('-')
+    slug = re.sub(r"[^\w\s-]", "", text.lower())
+    slug = re.sub(r"[-\s]+", "-", slug)
+    return slug.strip("-")
 
 
 def build_search_query(company_name: str, postal_code: str) -> str:
@@ -77,11 +77,18 @@ def build_search_query(company_name: str, postal_code: str) -> str:
     return query
 
 
-def search_company_website(query: str) -> list:
-    """Search for company website using DuckDuckGo. Returns list of results."""
+def search_company_website(query: str) -> dict:
+    """Search for company website using DuckDuckGo. Returns dict with results and query metadata."""
     try:
-        results = DDGS().text(query, max_results=20, region="fr-fr")
-        return results if results else []
+        max_results = 25
+        region = "fr-fr"
+        results = DDGS().text(query, max_results=max_results, region=region)
+        return {
+            "results": results if results else [],
+            "query": query,
+            "region": region,
+            "max_results": max_results,
+        }
     except Exception as e:
         raise click.ClickException(f"Search failed: {e}")
 
@@ -94,18 +101,30 @@ def is_directory(url: str) -> bool:
     return False
 
 
-def filter_results(results: list, blacklist_query: bool = False) -> list:
-    """Filter results: exclude directories, return non-directory URLs.
+def filter_results(results: list) -> tuple:
+    """Filter results: exclude directories, return (filtered, excluded) tuples.
 
-    If blacklist_query=True, results already excluded directories via search syntax.
+    Returns a tuple of (filtered_results, excluded_results) where each is a list of dicts
+    with url, title, snippet, and exclusion_reason.
     """
     filtered = []
+    excluded = []
+
     for result in results:
         url = result.get("href", "")
         title = result.get("title", "")
         body = result.get("body", "")
 
-        if not is_directory(url):
+        if is_directory(url):
+            excluded.append(
+                {
+                    "url": url,
+                    "title": title,
+                    "snippet": body,
+                    "exclusion_reason": "blacklisted_directory",
+                }
+            )
+        else:
             filtered.append(
                 {
                     "url": url,
@@ -114,10 +133,17 @@ def filter_results(results: list, blacklist_query: bool = False) -> list:
                 }
             )
 
-    return filtered
+    return filtered, excluded
 
 
-def save_ddg_results(siren: str, company_name: str, results: list, company_info: dict) -> None:
+def save_ddg_results(
+    siren: str,
+    company_name: str,
+    search_metadata: dict,
+    company_info: dict,
+    filtered_results: list,
+    excluded_results: list,
+) -> None:
     """Save full DDG results to JSON file with metadata."""
     DDG_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
     slug = slugify(company_name)
@@ -131,8 +157,23 @@ def save_ddg_results(siren: str, company_name: str, results: list, company_info:
         "company_name": company_name,
         "slug": slug,
         "search_date": search_date_epoch,
+        "search_date_iso": search_date_iso,
         "company_info": company_info,
-        "results": results,
+        "ddg_query": {
+            "query": search_metadata.get("query"),
+            "region": search_metadata.get("region"),
+            "max_results": search_metadata.get("max_results"),
+        },
+        "filtering": {
+            "blacklist_domains": list(DIRECTORY_BLACKLIST),
+            "total_results": len(search_metadata.get("results", [])),
+            "filtered_results": len(filtered_results),
+            "excluded_results": len(excluded_results),
+        },
+        "results": {
+            "included": filtered_results,
+            "excluded": excluded_results,
+        },
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -202,15 +243,20 @@ def search(siren: str, show_all: bool):
     query = build_search_query(nom, postal_code)
     click.echo(f"Searching: {query}", err=True)
 
-    results = search_company_website(query)
+    search_metadata = search_company_website(query)
 
-    if not results:
+    if not search_metadata.get("results"):
         raise click.ClickException("No search results found")
 
-    # Step 3: Save full results
-    save_ddg_results(siren, nom, results, company)
+    # Step 3: Filter results
+    filtered_results, excluded_results = filter_results(
+        search_metadata.get("results", [])
+    )
 
-    # Step 4: Filter results for display
+    # Step 4: Save full results
+    save_ddg_results(siren, nom, search_metadata, company, filtered_results, excluded_results)
+
+    # Step 5: Filter results for display
     if show_all:
         candidates = [
             {
@@ -218,10 +264,10 @@ def search(siren: str, show_all: bool):
                 "title": r.get("title", ""),
                 "snippet": r.get("body", ""),
             }
-            for r in results
+            for r in search_metadata.get("results", [])
         ]
     else:
-        candidates = filter_results(results)
+        candidates = filtered_results
 
     # Step 5: Print results
     print_candidates(nom, siren, candidates)
