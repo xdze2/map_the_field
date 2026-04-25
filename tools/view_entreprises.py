@@ -76,6 +76,22 @@ def load_jsonl(filepath: Path) -> list:
     return results
 
 
+def filter_active_only(results: list) -> tuple:
+    """Filter out closed companies. Returns (active_results, excluded_count).
+
+    etat_administratif: "A" = Actif, "F" = Fermé
+    """
+    active = []
+    excluded = 0
+    for enterprise in results:
+        etat = enterprise.get("etat_administratif", "").upper()
+        if etat == "A":
+            active.append(enterprise)
+        else:
+            excluded += 1
+    return active, excluded
+
+
 def print_condensed_results(results: list, naf_dict: dict):
     """Print condensed view: name, age, activity, size, directors."""
     for i, enterprise in enumerate(results, 1):
@@ -195,7 +211,7 @@ def print_full_results(results: list, naf_dict: dict):
     "--file",
     "-f",
     type=click.Path(exists=True),
-    help="Path to JSONL file (if not specified, lists available files)",
+    help="Path to JSONL file or directory (defaults to data/raw/searches/)",
 )
 @click.option(
     "--limit",
@@ -208,15 +224,9 @@ def print_full_results(results: list, naf_dict: dict):
     "--format",
     type=click.Choice(["condensed", "full"]),
     default="condensed",
-    help="Output format",
+    help="Output format: condensed (name, age, activity, size, directors) or full (all details)",
 )
-@click.option(
-    "--json",
-    "output_json",
-    is_flag=True,
-    help="Output as JSON",
-)
-def view(file: Optional[str], limit: Optional[int], format: str, output_json: bool):
+def view(file: Optional[str], limit: Optional[int], format: str):
     """View downloaded enterprise data from JSONL files.
 
     Pass a file path to view a single file, or a directory to load all JSONL files.
@@ -258,21 +268,24 @@ def view(file: Optional[str], limit: Optional[int], format: str, output_json: bo
         click.echo("No results found.", err=True)
         return
 
+    # Filter out closed companies
+    results, excluded = filter_active_only(results)
+
     # Apply limit
     if limit:
         results = results[:limit]
 
-    click.echo(f"Displaying {len(results)}/{total_results} results\n", err=True)
+    summary = f"Displaying {len(results)}/{total_results} results"
+    if excluded:
+        summary += f" ({excluded} closed excluded)"
+    click.echo(f"{summary}\n", err=True)
 
-    if output_json:
-        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
+    naf_dict = load_naf_codes()
+
+    if format == "full":
+        print_full_results(results, naf_dict)
     else:
-        naf_dict = load_naf_codes()
-
-        if format == "full":
-            print_full_results(results, naf_dict)
-        else:
-            print_condensed_results(results, naf_dict)
+        print_condensed_results(results, naf_dict)
 
 
 if __name__ == "__main__":
