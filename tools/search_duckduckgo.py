@@ -178,6 +178,9 @@ def search(siren: str, show_all: bool):
 
     Looks up company in local downloads, then searches for website using postal code + company name.
     By default, filters out known directories (societe.com, etc).
+
+    Auto-saves full DDG results to /data/company_data/ddg_searches/ as JSON with metadata
+    (SIREN, company name, slug, epoch timestamp).
     """
 
     # Step 1: Find company in local data

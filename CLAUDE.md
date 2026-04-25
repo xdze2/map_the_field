@@ -39,13 +39,13 @@ When asked to explore, discover, or research:
   - `search_duckduckgo.py` — Search for company websites via DuckDuckGo
   - `naf_categories.yaml` — NAF activity categories for filtering
   - `naf_codes.csv` — Full NAF code reference
-- `/data/raw/searches/` — Downloaded JSONL data (`.gitignore`d)
-  - `*.jsonl` — one enterprise per line, full API response
-  - `metadata/search_log.jsonl` — search parameters & result counts
-- `/data/company_data/` — Company triage and research data
-  - `ddg_searches/` — Full DuckDuckGo search results (JSON files)
-  - `insights/` — Decision files (CSV format)
-    - `status.csv` — SIREN, status, reason, notes, date, author (append-only)
+- `/data/company_data/` — Company research, triage, and insights
+  - `sirene_searches/` — SIREN API downloads (JSONL format, `.gitignore`d)
+    - `*.jsonl` — one enterprise per line, full API response
+  - `ddg_searches/` — DuckDuckGo search results (JSON format with metadata)
+    - `ddg_search_{SIREN}_{slug}_{date}.json` — full results + metadata
+  - `insights/` — Triage decisions (append-only CSV)
+    - `status.csv` — SIREN, status, reason, notes, date, author
 
 ## Workflow
 
@@ -77,17 +77,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Download company data:**
+**Download SIREN data:**
 ```bash
 source tools/venv/bin/activate
-python tools/download_entreprises.py --postal-code 75001 --naf-category tech
+python tools/download_entreprises.py --postal-code 75001 --naf-category core-tech
 ```
+Saves raw JSONL results to `/data/company_data/sirene_searches/`.
 
-**View downloaded data:**
+**View SIREN data:**
 ```bash
 source tools/venv/bin/activate
-python tools/view_entreprises.py --file data/raw/searches/ --format condensed
+python tools/view_entreprises.py --file data/company_data/sirene_searches/ --format condensed
 ```
+Filters active companies, supports `--format full` for detailed view.
 
 **Search for company websites:**
 ```bash

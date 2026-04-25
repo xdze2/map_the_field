@@ -15,8 +15,8 @@ SCRIPT_DIR = Path(__file__).parent
 NAF_FILE = SCRIPT_DIR / "naf_codes.csv"
 NAF_CATEGORIES_FILE = SCRIPT_DIR / "naf_categories.yaml"
 DATA_DIR = SCRIPT_DIR.parent / "data"
-RAW_DIR = DATA_DIR / "raw" / "searches"
-METADATA_FILE = DATA_DIR / "raw" / "metadata" / "search_log.jsonl"
+COMPANY_DATA_DIR = DATA_DIR / "company_data"
+SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"
 
 
 def load_naf_categories():
@@ -90,11 +90,10 @@ def generate_filename(postal_code: str, naf_filter: Optional[str], query: str) -
 
 def download_all_pages(postal_code: str, naf_filter: Optional[str], query: str) -> tuple:
     """Download all pages for a search query. Returns (total_results, results_count)."""
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    METADATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SIRENE_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
 
     filename = generate_filename(postal_code, naf_filter, query)
-    filepath = RAW_DIR / filename
+    filepath = SIRENE_SEARCHES_DIR / filename
 
     click.echo(f"Downloading to {filepath}", err=True)
 
@@ -148,21 +147,6 @@ def download_all_pages(postal_code: str, naf_filter: Optional[str], query: str) 
 
     click.echo(f"✓ Downloaded {len(all_results)} results to {filename}", err=True)
 
-    # Log metadata
-    metadata = {
-        "timestamp": datetime.now().isoformat(),
-        "postal_code": postal_code,
-        "naf_filter": naf_filter,
-        "query": query if query else None,
-        "total_results": total_results,
-        "downloaded_count": len(all_results),
-        "file": filename,
-        "status": "complete"
-    }
-
-    with open(METADATA_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-
     return total_results, len(all_results)
 
 
@@ -192,25 +176,17 @@ def download_all_pages(postal_code: str, naf_filter: Optional[str], query: str) 
     help="Filter by NAF category (see naf_categories.yaml for full list)",
 )
 def download(postal_code: str, query: str, naf: tuple, naf_category: str):
-    """Download all enterprises for a postal code and save to JSONL format.
+    """Download enterprises from API Recherche d'Entreprises and save to JSONL.
 
-    Fetches all pages from the API Recherche d'Entreprises, respecting rate limits (7 req/s).
-    Saves results to data/raw/searches/{postal_code}_{filters}_{date}.jsonl (one enterprise per line).
-    Logs search metadata to data/raw/metadata/search_log.jsonl for tracking.
+    Saves raw results to data/company_data/sirene_searches/{postal_code}_{filters}_{date}.jsonl
+    (one enterprise per line). Use view_entreprises.py to browse or filter results.
 
-    NAF categories are defined in naf_categories.yaml (core-tech, data, research, consulting).
+    Respects API rate limits (7 req/s). NAF categories defined in naf_categories.yaml.
 
     Examples:
-        # All enterprises in postal code
         python download_entreprises.py -p 75015
-
-        # Filter by NAF category (short option)
         python download_entreprises.py -p 75015 -c core-tech
-
-        # Combine postal code with query
         python download_entreprises.py -p 75015 -q "intelligence artificielle"
-
-        # Multiple specific NAF codes
         python download_entreprises.py -p 75015 -n 62.01Z -n 62.02A
     """
 
@@ -225,7 +201,7 @@ def download(postal_code: str, query: str, naf: tuple, naf_category: str):
 
     total_results, downloaded_count = download_all_pages(postal_code, naf_filter, query)
 
-    click.echo(f"\n✓ Download complete: {downloaded_count}/{total_results} results", err=True)
+    click.echo(f"\n✓ Complete: {downloaded_count}/{total_results} results saved", err=True)
 
 
 if __name__ == "__main__":

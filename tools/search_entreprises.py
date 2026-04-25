@@ -3,99 +3,52 @@ import click
 import requests
 import time
 import json
-import csv
+import yaml
 from typing import Optional
 from pathlib import Path
+from datetime import datetime
 
 BASE_URL = "https://recherche-entreprises.api.gouv.fr/search"
-RATE_LIMIT_DELAY = 0.15  # 7 requests/second = ~143ms between requests
+RATE_LIMIT_DELAY = 0.15
 SCRIPT_DIR = Path(__file__).parent
-NAF_FILE = SCRIPT_DIR / "naf_codes.csv"
-
-
-def load_naf_codes():
-    """Load NAF codes from CSV into a dictionary."""
-    naf_dict = {}
-    if not NAF_FILE.exists():
-        return naf_dict
-
-    try:
-        with open(NAF_FILE, encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                code = row.get("Code", "").strip()
-                label = row.get(
-                    " Intitulés de la  NAF rév. 2, version finale ", ""
-                ).strip()
-                if code and label:
-                    naf_dict[code] = label
-    except Exception as e:
-        click.echo(f"Warning: Could not load NAF codes: {e}", err=True)
-
-    return naf_dict
-
-
-def decode_naf(code: str, naf_dict: dict) -> str:
-    """Decode NAF code to human-readable label."""
-    if not code:
-        return "N/A"
-    return naf_dict.get(code, code)
+NAF_CATEGORIES_FILE = SCRIPT_DIR / "naf_categories.yaml"
+DATA_DIR = SCRIPT_DIR.parent / "data"
+COMPANY_DATA_DIR = DATA_DIR / "company_data"
+SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"
 
 
 def load_naf_categories():
-    """Load NAF categories for data science relevant codes."""
-    category_map = {
-        "core-tech": ["62.01Z", "62.02A", "62.09Z", "58.29B"],
-        "data": ["63.11Z", "63.12Z", "84.13Z"],
-        "research": ["72.11Z", "72.19Z", "72.20Z"],
-        "consulting": ["70.22Z", "73.11Z"],
-    }
-    return category_map
+    """Load NAF categories from YAML config file."""
+    if not NAF_CATEGORIES_FILE.exists():
+        raise click.ClickException(f"NAF categories config not found: {NAF_CATEGORIES_FILE}")
 
-
-def get_size_category(tranche_code: str) -> str:
-    """Map official INSEE effectif bracket codes to readable categories."""
-    # Source: https://www.insee.fr/fr/information/2120875
-    size_map = {
-        "NN": "Unknown",
-        "00": "0 employees",
-        "01": "1-2",
-        "02": "3-5",
-        "03": "6-9",
-        "11": "10-19",
-        "12": "20-49",
-        "21": "50-99",
-        "22": "100-199",
-        "31": "200-249",
-        "32": "250-499",
-        "41": "500-999",
-        "42": "1000-1999",
-        "51": "2000-4999",
-        "52": "5000-9999",
-        "53": "10000+",
-    }
-    return size_map.get(tranche_code, tranche_code)
+    try:
+        with open(NAF_CATEGORIES_FILE, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            category_map = {}
+            for category_name, category_data in config.get("categories", {}).items():
+                codes = [item["code"] for item in category_data.get("codes", [])]
+                category_map[category_name] = codes
+            return category_map
+    except Exception as e:
+        raise click.ClickException(f"Could not load NAF categories: {e}")
 
 
 def build_naf_filter(naf: tuple, naf_category: str) -> Optional[str]:
     """Build NAF filter string from CLI arguments."""
     naf_codes = []
 
-    # Add codes from --naf arguments
     if naf:
         for n in naf:
-            # Handle comma-separated values
             naf_codes.extend([code.strip() for code in n.split(",")])
 
-    # Add codes from --naf-category
     if naf_category and naf_category != "all":
         categories = load_naf_categories()
         if naf_category in categories:
             naf_codes.extend(categories[naf_category])
 
-    # Return comma-separated filter string
     if naf_codes:
-        return ",".join(set(naf_codes))  # Remove duplicates
+        return ",".join(set(naf_codes))
     return None
 
 
@@ -109,6 +62,83 @@ def check_rate_limit():
         time.sleep(RATE_LIMIT_DELAY - elapsed)
 
     check_rate_limit.last_request = time.time()
+
+
+def generate_filename(postal_code: str, naf_filter: Optional[str], query: str) -> str:
+    """Generate JSONL filename based on search parameters."""
+    parts = [f"postal_{postal_code}"]
+
+    if naf_filter:
+        first_code = naf_filter.split(",")[0]
+        parts.append(f"naf_{first_code.replace('.', '-')}")
+
+    if query:
+        parts.append(f"query_{query[:20]}")
+
+    parts.append(datetime.now().strftime("%Y-%m-%d"))
+
+    return "_".join(parts) + ".jsonl"
+
+
+def search_and_save(postal_code: str, naf_filter: Optional[str], query: str) -> tuple:
+    """Search API and save raw JSONL results. Returns (total_results, saved_count)."""
+    SIRENE_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
+
+    filename = generate_filename(postal_code, naf_filter, query)
+    filepath = SIRENE_SEARCHES_DIR / filename
+
+    click.echo(f"Downloading to {filepath}", err=True)
+
+    all_results = []
+    page = 1
+    total_results = None
+
+    while True:
+        check_rate_limit()
+
+        params = {
+            "code_postal": postal_code,
+            "q": query if query else None,
+            "per_page": 25,
+            "page": page,
+        }
+
+        if naf_filter:
+            params["activite_principale"] = naf_filter
+
+        try:
+            click.echo(f"  Fetching page {page}...", err=True)
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise click.ClickException(f"API request failed on page {page}: {e}")
+
+        data = response.json()
+        results = data.get("results", [])
+
+        if total_results is None:
+            total_results = data.get("total_results", 0)
+            click.echo(f"  Total results available: {total_results}", err=True)
+
+        if not results:
+            break
+
+        all_results.extend(results)
+
+        total_pages = data.get("total_pages", 1)
+        if page >= total_pages:
+            break
+
+        page += 1
+
+    # Write JSONL file
+    with open(filepath, "w", encoding="utf-8") as f:
+        for result in all_results:
+            f.write(json.dumps(result, ensure_ascii=False) + "\n")
+
+    click.echo(f"✓ Saved {len(all_results)} results to {filename}", err=True)
+
+    return total_results, len(all_results)
 
 
 @click.command()
@@ -132,210 +162,37 @@ def check_rate_limit():
 )
 @click.option(
     "--naf-category",
+    "-c",
     type=click.Choice(["core-tech", "data", "research", "consulting", "all"]),
-    help="Filter by NAF category (data science relevant codes)",
+    help="Filter by NAF category (see naf_categories.yaml for full list)",
 )
-@click.option(
-    "--limit",
-    "-l",
-    default=20,
-    type=int,
-    help="Maximum results to return",
-)
-@click.option(
-    "--format",
-    "-f",
-    type=click.Choice(["json", "text"]),
-    default="text",
-    help="Output format",
-)
-@click.option(
-    "--full",
-    is_flag=True,
-    help="Show full details (default: condensed view)",
-)
-def search(
-    postal_code: str,
-    query: str,
-    naf: tuple,
-    naf_category: str,
-    limit: int,
-    format: str,
-    full: bool,
-):
-    """Search for enterprises in a French city by postal code."""
+def search(postal_code: str, query: str, naf: tuple, naf_category: str):
+    """Download enterprises from API Recherche d'Entreprises and save to JSONL.
+
+    Saves raw results to data/company_data/sirene_searches/{postal_code}_{filters}_{date}.jsonl
+    (one enterprise per line). Use view_entreprises.py to browse or filter results.
+
+    Respects API rate limits (7 req/s). NAF categories defined in naf_categories.yaml.
+
+    Examples:
+        python search_entreprises.py -p 75015
+        python search_entreprises.py -p 75015 -c core-tech
+        python search_entreprises.py -p 75015 -q "intelligence artificielle"
+        python search_entreprises.py -p 75015 -n 62.01Z -n 62.02A
+    """
 
     if len(postal_code) != 5 or not postal_code.isdigit():
         raise click.BadParameter("Postal code must be exactly 5 digits")
 
-    naf_dict = load_naf_codes()
     naf_filter = build_naf_filter(naf, naf_category)
 
-    click.echo(f"Searching for enterprises in {postal_code}...", err=True)
+    click.echo(f"Downloading enterprises in {postal_code}...", err=True)
     if naf_filter:
         click.echo(f"NAF filter: {naf_filter}", err=True)
 
-    check_rate_limit()
+    total_results, downloaded_count = search_and_save(postal_code, naf_filter, query)
 
-    params = {
-        "code_postal": postal_code,
-        "q": query if query else None,
-        "per_page": min(limit, 25),  # API max is 25
-        "page": 1,
-    }
-
-    # Add NAF filter if specified
-    if naf_filter:
-        params["activite_principale"] = naf_filter
-
-    try:
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        raise click.ClickException(f"API request failed: {e}")
-
-    data = response.json()
-    results = data.get("results", [])
-    total_results = data.get("total_results", 0)
-
-    if not results:
-        click.echo("No enterprises found.", err=True)
-        return
-
-    # Limit results
-    results = results[:limit]
-
-    if format == "json":
-        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
-    else:
-        # Text output
-        displayed = len(results)
-        click.echo(f"\nFound {displayed} entreprises (total: {total_results}):\n")
-
-        if full:
-            print_full_results(results, naf_dict)
-        else:
-            print_condensed_results(results, naf_dict)
-
-
-def print_condensed_results(results: list, naf_dict: dict):
-    """Print condensed view: name, age, activity, size, directors."""
-    for i, enterprise in enumerate(results, 1):
-        nom = enterprise.get("nom_complet", "N/A")
-        siren = enterprise.get("siren", "N/A")
-        date_creation = enterprise.get("date_creation", "N/A")
-        activite_code = enterprise.get("activite_principale", "N/A")
-        activite_label = decode_naf(activite_code, naf_dict)
-        effectif = enterprise.get("tranche_effectif_salarie", "N/A")
-        effectif_label = get_size_category(effectif) if effectif != "N/A" else "N/A"
-        dirigeants = enterprise.get("dirigeants", [])
-
-        # Calculate company age
-        age = "N/A"
-        if date_creation and date_creation != "N/A":
-            try:
-                creation_year = int(date_creation.split("-")[0])
-                age = f"{2026 - creation_year}y" if creation_year <= 2026 else "N/A"
-            except (ValueError, IndexError):
-                age = "N/A"
-
-        # Directors names
-        dirigeants_names = []
-        for d in dirigeants[:3]:
-            nom_d = f"{d.get('prenoms', '')} {d.get('nom', '')}".strip()
-            if nom_d:
-                dirigeants_names.append(nom_d)
-        dirigeants_str = ", ".join(dirigeants_names) if dirigeants_names else "N/A"
-
-        click.echo(f"{i}. {nom} ({siren})")
-        click.echo(
-            f"   Age: {age} | Activité: {activite_code} {activite_label} | Size: {effectif_label} | Dirigeants: {dirigeants_str}"
-        )
-        click.echo()
-
-
-def print_full_results(results: list, naf_dict: dict):
-    """Print full verbose view with all details."""
-    for i, enterprise in enumerate(results, 1):
-        siren = enterprise.get("siren", "N/A")
-        nom = enterprise.get("nom_complet", "N/A")
-        activite_code = enterprise.get("activite_principale", "N/A")
-        activite_label = decode_naf(activite_code, naf_dict)
-        nature_juridique = enterprise.get("nature_juridique", "N/A")
-        effectif = enterprise.get("tranche_effectif_salarie", "N/A")
-        nb_etablissements = enterprise.get("nombre_etablissements", "N/A")
-        date_creation = enterprise.get("date_creation", "N/A")
-        etat = enterprise.get("etat_administratif", "N/A")
-
-        siege = enterprise.get("siege", {})
-        adresse = siege.get("adresse", "N/A")
-        latitude = siege.get("latitude")
-        longitude = siege.get("longitude")
-
-        finances = enterprise.get("finances", {})
-        dirigeants = enterprise.get("dirigeants", [])
-
-        complements = enterprise.get("complements", {})
-        est_ess = complements.get("est_ess", False)
-        est_societe_mission = complements.get("est_societe_mission", False)
-        est_association = complements.get("est_association", False)
-        est_service_public = complements.get("est_service_public", False)
-
-        # Main info
-        click.echo(f"{i}. {nom}")
-        click.echo(f"   SIREN: {siren}")
-        click.echo(f"   Statut: {etat} | Créée: {date_creation}")
-        click.echo(f"   Catégorie juridique: {nature_juridique}")
-
-        # Activity
-        click.echo(f"   Activité: {activite_code} - {activite_label}")
-
-        # Size
-        click.echo(f"   Établissements: {nb_etablissements} | Effectif: {effectif}")
-
-        # Address & Location
-        click.echo(f"   Adresse: {adresse}")
-        if latitude and longitude:
-            click.echo(f"   Coordonnées: {latitude}, {longitude}")
-
-        # Labels & Certifications
-        labels = []
-        if est_ess:
-            labels.append("ESS")
-        if est_societe_mission:
-            labels.append("Société à mission")
-        if est_association:
-            labels.append("Association")
-        if est_service_public:
-            labels.append("Service public")
-        if labels:
-            click.echo(f"   Labels: {', '.join(labels)}")
-
-        # Directors
-        if dirigeants:
-            click.echo(f"   Dirigeants: {len(dirigeants)}")
-            for d in dirigeants[:2]:  # Show first 2
-                nom_d = f"{d.get('prenoms', '')} {d.get('nom', '')}".strip()
-                qualite = d.get("qualite", "")
-                if nom_d:
-                    click.echo(f"     - {nom_d} ({qualite})")
-            if len(dirigeants) > 2:
-                click.echo(f"     ... et {len(dirigeants) - 2} autre(s)")
-
-        # Finances
-        if finances:
-            latest_year = max(finances.keys(), default=None)
-            if latest_year:
-                ca = finances[latest_year].get("ca")
-                resultat = finances[latest_year].get("resultat_net")
-                if ca:
-                    click.echo(
-                        f"   Finances ({latest_year}): CA={ca:,}€ | Résultat net={resultat:,}€"
-                        if resultat
-                        else f"   Finances ({latest_year}): CA={ca:,}€"
-                    )
-
-        click.echo()
+    click.echo(f"\n✓ Complete: {downloaded_count}/{total_results} results saved", err=True)
 
 
 if __name__ == "__main__":

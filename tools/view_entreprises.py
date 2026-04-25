@@ -10,7 +10,8 @@ SCRIPT_DIR = Path(__file__).parent
 NAF_FILE = SCRIPT_DIR / "naf_codes.csv"
 NAF_CATEGORIES_FILE = SCRIPT_DIR / "naf_categories.yaml"
 DATA_DIR = SCRIPT_DIR.parent / "data"
-RAW_DIR = DATA_DIR / "raw" / "searches"
+COMPANY_DATA_DIR = DATA_DIR / "company_data"
+SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"
 
 
 def load_naf_codes():
@@ -211,7 +212,7 @@ def print_full_results(results: list, naf_dict: dict):
     "--file",
     "-f",
     type=click.Path(exists=True),
-    help="Path to JSONL file or directory (defaults to data/raw/searches/)",
+    help="Path to JSONL file or directory (defaults to data/company_data/sirene_searches/)",
 )
 @click.option(
     "--limit",
@@ -227,10 +228,11 @@ def print_full_results(results: list, naf_dict: dict):
     help="Output format: condensed (name, age, activity, size, directors) or full (all details)",
 )
 def view(file: Optional[str], limit: Optional[int], format: str):
-    """View downloaded enterprise data from JSONL files.
+    """View downloaded SIREN enterprise data from JSONL files.
 
     Pass a file path to view a single file, or a directory to load all JSONL files.
-    If neither is specified, defaults to data/raw/searches/.
+    If neither is specified, defaults to data/company_data/sirene_searches/.
+    Filters out closed companies by default.
     """
 
     # Determine which path to use
@@ -239,7 +241,7 @@ def view(file: Optional[str], limit: Optional[int], format: str):
         if not filepath.exists():
             raise click.ClickException(f"Path not found: {file}")
     else:
-        filepath = RAW_DIR
+        filepath = SIRENE_SEARCHES_DIR
         if not filepath.exists():
             click.echo("No data downloaded yet. Use download_entreprises.py to download data.", err=True)
             return
