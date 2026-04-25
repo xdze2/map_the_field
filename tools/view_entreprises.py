@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 import click
-import requests
-import time
 import json
 import csv
+import yaml
 from typing import Optional
 from pathlib import Path
 
-BASE_URL = "https://recherche-entreprises.api.gouv.fr/search"
-RATE_LIMIT_DELAY = 0.15  # 7 requests/second = ~143ms between requests
 SCRIPT_DIR = Path(__file__).parent
 NAF_FILE = SCRIPT_DIR / "naf_codes.csv"
+NAF_CATEGORIES_FILE = SCRIPT_DIR / "naf_categories.yaml"
+DATA_DIR = SCRIPT_DIR.parent / "data"
+RAW_DIR = DATA_DIR / "raw" / "searches"
 
 
 def load_naf_codes():
@@ -24,9 +24,7 @@ def load_naf_codes():
             reader = csv.DictReader(f)
             for row in reader:
                 code = row.get("Code", "").strip()
-                label = row.get(
-                    " Intitulés de la  NAF rév. 2, version finale ", ""
-                ).strip()
+                label = row.get(" Intitulés de la  NAF rév. 2, version finale ", "").strip()
                 if code and label:
                     naf_dict[code] = label
     except Exception as e:
@@ -42,20 +40,8 @@ def decode_naf(code: str, naf_dict: dict) -> str:
     return naf_dict.get(code, code)
 
 
-def load_naf_categories():
-    """Load NAF categories for data science relevant codes."""
-    category_map = {
-        "core-tech": ["62.01Z", "62.02A", "62.09Z", "58.29B"],
-        "data": ["63.11Z", "63.12Z", "84.13Z"],
-        "research": ["72.11Z", "72.19Z", "72.20Z"],
-        "consulting": ["70.22Z", "73.11Z"],
-    }
-    return category_map
-
-
 def get_size_category(tranche_code: str) -> str:
     """Map official INSEE effectif bracket codes to readable categories."""
-    # Source: https://www.insee.fr/fr/information/2120875
     size_map = {
         "NN": "Unknown",
         "00": "0 employees",
@@ -77,145 +63,17 @@ def get_size_category(tranche_code: str) -> str:
     return size_map.get(tranche_code, tranche_code)
 
 
-def build_naf_filter(naf: tuple, naf_category: str) -> Optional[str]:
-    """Build NAF filter string from CLI arguments."""
-    naf_codes = []
-
-    # Add codes from --naf arguments
-    if naf:
-        for n in naf:
-            # Handle comma-separated values
-            naf_codes.extend([code.strip() for code in n.split(",")])
-
-    # Add codes from --naf-category
-    if naf_category and naf_category != "all":
-        categories = load_naf_categories()
-        if naf_category in categories:
-            naf_codes.extend(categories[naf_category])
-
-    # Return comma-separated filter string
-    if naf_codes:
-        return ",".join(set(naf_codes))  # Remove duplicates
-    return None
-
-
-def check_rate_limit():
-    """Implement basic rate limiting with delay between requests."""
-    if not hasattr(check_rate_limit, "last_request"):
-        check_rate_limit.last_request = 0
-
-    elapsed = time.time() - check_rate_limit.last_request
-    if elapsed < RATE_LIMIT_DELAY:
-        time.sleep(RATE_LIMIT_DELAY - elapsed)
-
-    check_rate_limit.last_request = time.time()
-
-
-@click.command()
-@click.option(
-    "--postal-code",
-    "-p",
-    required=True,
-    help="Postal code (5 digits)",
-)
-@click.option(
-    "--query",
-    "-q",
-    default="",
-    help="Search query (company name, address, etc.)",
-)
-@click.option(
-    "--naf",
-    "-n",
-    multiple=True,
-    help="NAF code(s) to filter by (can be used multiple times or comma-separated)",
-)
-@click.option(
-    "--naf-category",
-    type=click.Choice(["core-tech", "data", "research", "consulting", "all"]),
-    help="Filter by NAF category (data science relevant codes)",
-)
-@click.option(
-    "--limit",
-    "-l",
-    default=20,
-    type=int,
-    help="Maximum results to return",
-)
-@click.option(
-    "--format",
-    "-f",
-    type=click.Choice(["json", "text"]),
-    default="text",
-    help="Output format",
-)
-@click.option(
-    "--full",
-    is_flag=True,
-    help="Show full details (default: condensed view)",
-)
-def search(
-    postal_code: str,
-    query: str,
-    naf: tuple,
-    naf_category: str,
-    limit: int,
-    format: str,
-    full: bool,
-):
-    """Search for enterprises in a French city by postal code."""
-
-    if len(postal_code) != 5 or not postal_code.isdigit():
-        raise click.BadParameter("Postal code must be exactly 5 digits")
-
-    naf_dict = load_naf_codes()
-    naf_filter = build_naf_filter(naf, naf_category)
-
-    click.echo(f"Searching for enterprises in {postal_code}...", err=True)
-    if naf_filter:
-        click.echo(f"NAF filter: {naf_filter}", err=True)
-
-    check_rate_limit()
-
-    params = {
-        "code_postal": postal_code,
-        "q": query if query else None,
-        "per_page": min(limit, 25),  # API max is 25
-        "page": 1,
-    }
-
-    # Add NAF filter if specified
-    if naf_filter:
-        params["activite_principale"] = naf_filter
-
+def load_jsonl(filepath: Path) -> list:
+    """Load enterprises from JSONL file."""
+    results = []
     try:
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        raise click.ClickException(f"API request failed: {e}")
-
-    data = response.json()
-    results = data.get("results", [])
-    total_results = data.get("total_results", 0)
-
-    if not results:
-        click.echo("No enterprises found.", err=True)
-        return
-
-    # Limit results
-    results = results[:limit]
-
-    if format == "json":
-        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
-    else:
-        # Text output
-        displayed = len(results)
-        click.echo(f"\nFound {displayed} entreprises (total: {total_results}):\n")
-
-        if full:
-            print_full_results(results, naf_dict)
-        else:
-            print_condensed_results(results, naf_dict)
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    results.append(json.loads(line))
+    except Exception as e:
+        raise click.ClickException(f"Could not load {filepath}: {e}")
+    return results
 
 
 def print_condensed_results(results: list, naf_dict: dict):
@@ -248,9 +106,7 @@ def print_condensed_results(results: list, naf_dict: dict):
         dirigeants_str = ", ".join(dirigeants_names) if dirigeants_names else "N/A"
 
         click.echo(f"{i}. {nom} ({siren})")
-        click.echo(
-            f"   Age: {age} | Activité: {activite_code} {activite_label} | Size: {effectif_label} | Dirigeants: {dirigeants_str}"
-        )
+        click.echo(f"   Age: {age} | Activité: {activite_code} {activite_label} | Size: {effectif_label} | Dirigeants: {dirigeants_str}")
         click.echo()
 
 
@@ -329,14 +185,85 @@ def print_full_results(results: list, naf_dict: dict):
                 ca = finances[latest_year].get("ca")
                 resultat = finances[latest_year].get("resultat_net")
                 if ca:
-                    click.echo(
-                        f"   Finances ({latest_year}): CA={ca:,}€ | Résultat net={resultat:,}€"
-                        if resultat
-                        else f"   Finances ({latest_year}): CA={ca:,}€"
-                    )
+                    click.echo(f"   Finances ({latest_year}): CA={ca:,}€ | Résultat net={resultat:,}€" if resultat else f"   Finances ({latest_year}): CA={ca:,}€")
 
         click.echo()
 
 
+@click.command()
+@click.option(
+    "--file",
+    "-f",
+    type=click.Path(exists=True),
+    help="Path to JSONL file (if not specified, lists available files)",
+)
+@click.option(
+    "--limit",
+    "-l",
+    default=None,
+    type=int,
+    help="Maximum results to display",
+)
+@click.option(
+    "--format",
+    type=click.Choice(["condensed", "full"]),
+    default="condensed",
+    help="Output format",
+)
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Output as JSON",
+)
+def view(file: Optional[str], limit: Optional[int], format: str, output_json: bool):
+    """View downloaded enterprise data from JSONL files."""
+
+    if not file:
+        # List available files
+        if not RAW_DIR.exists():
+            click.echo("No data downloaded yet. Use download_entreprises.py to download data.", err=True)
+            return
+
+        files = list(RAW_DIR.glob("*.jsonl"))
+        if not files:
+            click.echo("No JSONL files found in data/raw/searches/", err=True)
+            return
+
+        click.echo("Available files:", err=True)
+        for f in sorted(files):
+            size = f.stat().st_size
+            click.echo(f"  {f.name} ({size:,} bytes)", err=True)
+        return
+
+    filepath = Path(file)
+    if not filepath.exists():
+        raise click.ClickException(f"File not found: {file}")
+
+    click.echo(f"Loading {filepath.name}...", err=True)
+    results = load_jsonl(filepath)
+    total_results = len(results)
+
+    if not results:
+        click.echo("No results found.", err=True)
+        return
+
+    # Apply limit
+    if limit:
+        results = results[:limit]
+
+    click.echo(f"Displaying {len(results)}/{total_results} results\n", err=True)
+
+    if output_json:
+        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
+    else:
+        naf_dict = load_naf_codes()
+
+        if format == "full":
+            print_full_results(results, naf_dict)
+        else:
+            print_condensed_results(results, naf_dict)
+
+
 if __name__ == "__main__":
-    search()
+    view()

@@ -2,6 +2,10 @@
 
 Search for French enterprises using the INSEE SIREN database via the free API Recherche d'Entreprises.
 
+Two-script workflow:
+1. **download_entreprises.py** — Download all results to JSONL files (handles pagination, respects rate limits)
+2. **view_entreprises.py** — Explore downloaded data (condensed or full view)
+
 ## Data Source
 
 - **API**: [API Recherche d'Entreprises](https://recherche-entreprises.api.gouv.fr)
@@ -19,98 +23,109 @@ Search for French enterprises using the INSEE SIREN database via the free API Re
 pip install -r requirements.txt
 ```
 
-## Usage
+## Workflow
 
-### Basic Search by Postal Code
+### 1. Download Data
 
-```bash
-python search_entreprises.py --postal-code 75015
-```
-
-### Search with NAF Category Filter
-
-Filter by data science relevant NAF codes:
+Download all enterprises matching your criteria into JSONL files:
 
 ```bash
-# Core tech companies (software dev, consulting)
-python search_entreprises.py -p 75015 --naf-category core-tech
+# Basic: all enterprises in postal code
+python download_entreprises.py -p 75015
 
-# Data infrastructure companies
-python search_entreprises.py -p 75015 --naf-category data
+# With NAF category filter (see naf_categories.yaml)
+python download_entreprises.py -p 75015 -c core-tech
 
-# Research organizations (including social science R&D)
-python search_entreprises.py -p 75015 --naf-category research
+# With specific NAF codes
+python download_entreprises.py -p 75015 -n 62.01Z -n 62.02A
 
-# All consulting companies
-python search_entreprises.py -p 75015 --naf-category consulting
+# With search query
+python download_entreprises.py -p 75015 -q "intelligence artificielle"
 ```
 
-### Search with Specific NAF Codes
+Files are saved to `data/raw/searches/` with automatic pagination. Metadata is logged to `data/raw/metadata/search_log.jsonl`.
+
+**Available NAF categories** (in `naf_categories.yaml`):
+- `core-tech` — Software development, IT consulting, software publishing
+- `data` — Data processing, cloud hosting, market research
+- `research` — Biotech, science, social science R&D
+- `consulting` — Management consulting, advertising/ad tech
+
+### 2. View Data
+
+Browse downloaded data (condensed by default):
 
 ```bash
-# Single code
-python search_entreprises.py -p 75015 --naf 62.01Z
+# List available files
+python view_entreprises.py
 
-# Multiple codes (repeated option)
-python search_entreprises.py -p 75015 --naf 62.01Z --naf 62.02A
+# View with condensed output (name, age, activity, size, directors)
+python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl
 
-# Multiple codes (comma-separated)
-python search_entreprises.py -p 75015 --naf "62.01Z,62.02A"
+# View full details
+python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --format full
+
+# Limit results
+python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --limit 10
+
+# Output as JSON
+python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --json
 ```
 
-### Search with Query Filter
+## Output Examples
 
-```bash
-python search_entreprises.py -p 75015 -q "restaurant"
+### Condensed View (default)
+```
+1. LA POSTE (356000000)
+   Age: 35y | Activité: 53.10Z Activités de poste | Size: 1000-1999 | Dirigeants: N/A
+
+2. ACME CORP (123456789)
+   Age: 5y | Activité: 62.01Z Développement de logiciels | Size: 20-49 | Dirigeants: Jean Dupont, Marie Martin
 ```
 
-### JSON Output
-
-```bash
-python search_entreprises.py -p 75015 --format json
+### Full View
 ```
-
-### Custom Result Limit
-
-```bash
-python search_entreprises.py -p 75015 --limit 10
-```
-
-### All Options
-
-```bash
-python search_entreprises.py --help
-```
-
-```
-Usage: search_entreprises.py [OPTIONS]
-
-  Search for enterprises in a French city by postal code.
-
-Options:
-  -p, --postal-code TEXT     Postal code (5 digits)  [required]
-  -q, --query TEXT           Search query (company name, address, etc.)
-  -l, --limit INTEGER        Maximum results to return  [default: 20]
-  -f, --format [json|text]   Output format  [default: text]
-  --help                     Show this message and exit.
-```
-
-## Output Example
-
-```
-Found 3 entreprises:
-
 1. LA POSTE
    SIREN: 356000000
+   Statut: A | Créée: 1991-01-01
+   Catégorie juridique: 5210
    Activité: 53.10Z - Activités de poste dans le cadre d'une obligation de service universel
-   Effectif: 53
+   Établissements: 12734 | Effectif: 42
    Adresse: DIRECTION GENERALE DE LA POSTE 9 RUE DU COLONEL PIERRE AVIA 75015 PARIS
+   Coordonnées: 48.83002, 2.275688
+   Labels: Service public
+```
 
-2. ELECTRICITE DE FRANCE (EDF)
-   SIREN: 552081317
-   Activité: 35.11Z - Production d'électricité
-   Effectif: 53
-   Adresse: 22-30 22 AVENUE DE WAGRAM 75008 PARIS
+## Options
+
+### download_entreprises.py
+
+```bash
+python download_entreprises.py --help
+```
+
+```
+Options:
+  -p, --postal-code TEXT      Postal code (5 digits)  [required]
+  -q, --query TEXT            Search query (company name, address, etc.)
+  -n, --naf TEXT              NAF code(s) (can be used multiple times or comma-separated)
+  -c, --naf-category TEXT     Filter by category (see naf_categories.yaml)
+  --help                      Show this message and exit.
+```
+
+### view_entreprises.py
+
+```bash
+python view_entreprises.py --help
+```
+
+```
+Options:
+  -f, --file PATH             Path to JSONL file (if not specified, lists available files)
+  -l, --limit INTEGER         Maximum results to display
+  --format [condensed|full]   Output format  [default: condensed]
+  --json                      Output as JSON
+  --help                      Show this message and exit.
 ```
 
 ## NAF Categories for Data Science

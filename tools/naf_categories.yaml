@@ -1,0 +1,40 @@
+categories:
+  core-tech:
+    description: Software development, IT consulting, software publishing
+    codes:
+      - code: 62.01Z
+        label: Développement de logiciels
+      - code: 62.02A
+        label: Conseil en informatique
+      - code: 62.09Z
+        label: Autres services informatiques
+      - code: 58.29B
+        label: Édition de logiciels
+
+  data:
+    description: Data processing, cloud hosting, market research
+    codes:
+      - code: 63.11Z
+        label: Traitement de données, hébergement et activités connexes
+      - code: 63.12Z
+        label: Portails internet
+      - code: 84.13Z
+        label: Études de marché et sondages d'opinion
+
+  research:
+    description: Biotech, science, social science R&D
+    codes:
+      - code: 72.11Z
+        label: Recherche et développement en biotechnologies
+      - code: 72.19Z
+        label: Autres recherches et développements en sciences naturelles et ingénierie
+      - code: 72.20Z
+        label: Recherches et développements en sciences sociales et humaines
+
+  consulting:
+    description: Management consulting, advertising/ad tech
+    codes:
+      - code: 70.22Z
+        label: Conseil en gestion et direction
+      - code: 73.11Z
+        label: Publicité
