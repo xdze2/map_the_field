@@ -12,8 +12,9 @@ from datetime import datetime
 BASE_URL = "https://recherche-entreprises.api.gouv.fr/search"
 RATE_LIMIT_DELAY = 0.15  # 7 requests/second = ~143ms between requests
 SCRIPT_DIR = Path(__file__).parent
-NAF_FILE = SCRIPT_DIR / "naf_codes.csv"
-NAF_CATEGORIES_FILE = SCRIPT_DIR / "naf_categories.yaml"
+SIREN_INFOS_DIR = SCRIPT_DIR / "siren_infos"
+NAF_FILE = SIREN_INFOS_DIR / "naf_codes.csv"
+NAF_CATEGORIES_FILE = SIREN_INFOS_DIR / "naf_categories.yaml"
 DATA_DIR = SCRIPT_DIR.parent / "data"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
 SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"

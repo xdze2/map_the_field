@@ -33,12 +33,15 @@ When asked to explore, discover, or research:
 **SIREN data tools** (standalone Python environment):
 - `/tools/` — Python scripts for SIREN/enterprise data
   - `tools/venv/` — isolated virtual environment (do NOT commit)
+  - `tools/siren_infos/` — Reference data for SIREN tools
+    - `naf_codes.csv` — Full NAF code reference
+    - `naf_categories.yaml` — NAF activity categories for filtering
+    - `int_courts_naf_rev_2.xls` — Original NAF source data
+    - `openapi.json` — SIREN API OpenAPI schema
   - `requirements.txt` — Python dependencies
   - `download_entreprises.py` — Download companies from Recherche d'Entreprises API
   - `view_entreprises.py` — View/filter downloaded JSONL data (filters out closed companies by default)
   - `search_duckduckgo.py` — Search for company websites via DuckDuckGo
-  - `naf_categories.yaml` — NAF activity categories for filtering
-  - `naf_codes.csv` — Full NAF code reference
 - `/data/company_data/` — Company research, triage, and insights
   - `sirene_searches/` — SIREN API downloads (JSONL format, `.gitignore`d)
     - `*.jsonl` — one enterprise per line, full API response

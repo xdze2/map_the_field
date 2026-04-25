@@ -11,8 +11,9 @@ except ImportError:
     sys.exit(1)
 
 SCRIPT_DIR = Path(__file__).parent
-XLS_FILE = SCRIPT_DIR / "int_courts_naf_rev_2.xls"
-CSV_FILE = SCRIPT_DIR / "naf_codes.csv"
+SIREN_INFOS_DIR = SCRIPT_DIR / "siren_infos"
+XLS_FILE = SIREN_INFOS_DIR / "int_courts_naf_rev_2.xls"
+CSV_FILE = SIREN_INFOS_DIR / "naf_codes.csv"
 
 
 def export_naf_to_csv():

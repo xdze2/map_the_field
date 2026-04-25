@@ -15,7 +15,7 @@ Two-script workflow:
 
 - **NAF Codes**: [INSEE NAF Nomenclature](https://www.insee.fr/fr/information/2406147)
   - Activity classification codes (Nomenclature d'activités française)
-  - Source file: `int_courts_naf_rev_2.xls` → exported to `naf_codes.csv`
+  - Source file: `siren_infos/int_courts_naf_rev_2.xls` → exported to `siren_infos/naf_codes.csv`
 
 ## Installation
 
@@ -33,7 +33,7 @@ Download all enterprises matching your criteria into JSONL files:
 # Basic: all enterprises in postal code
 python download_entreprises.py -p 75015
 
-# With NAF category filter (see naf_categories.yaml)
+# With NAF category filter (see siren_infos/naf_categories.yaml)
 python download_entreprises.py -p 75015 -c core-tech
 
 # With specific NAF codes
@@ -45,7 +45,7 @@ python download_entreprises.py -p 75015 -q "intelligence artificielle"
 
 Files are saved to `data/raw/searches/` with automatic pagination. Metadata is logged to `data/raw/metadata/search_log.jsonl`.
 
-**Available NAF categories** (in `naf_categories.yaml`):
+**Available NAF categories** (in `siren_infos/naf_categories.yaml`):
 - `core-tech` — Software development, IT consulting, software publishing
 - `data` — Data processing, cloud hosting, market research
 - `research` — Biotech, science, social science R&D
@@ -112,7 +112,7 @@ Options:
   -p, --postal-code TEXT      Postal code (5 digits)  [required]
   -q, --query TEXT            Search query (company name, address, etc.)
   -n, --naf TEXT              NAF code(s) (can be used multiple times or comma-separated)
-  -c, --naf-category TEXT     Filter by category (see naf_categories.yaml)
+  -c, --naf-category TEXT     Filter by category (see siren_infos/naf_categories.yaml)
   --help                      Show this message and exit.
 ```
 
@@ -142,7 +142,7 @@ Predefined NAF categories with codes relevant for data science job search:
 | **research** | 72.11Z, 72.19Z, 72.20Z | Biotech, science, social science R&D |
 | **consulting** | 70.22Z, 73.11Z | Management consulting, advertising/ad tech |
 
-See [data_science_naf_codes.csv](data_science_naf_codes.csv) for the full list with relevance ratings.
+See [naf_codes.csv](siren_infos/naf_codes.csv) for the full list with details.
 
 ## Features
 

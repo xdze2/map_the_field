@@ -4,6 +4,7 @@ venv
 data/
 
 *.pyc
+__pycache__
 
 # Node
 node_modules/

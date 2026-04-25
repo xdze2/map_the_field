@@ -8,11 +8,12 @@ from datetime import datetime
 import re
 
 SCRIPT_DIR = Path(__file__).parent
+SIREN_INFOS_DIR = SCRIPT_DIR / "siren_infos"
 DATA_DIR = SCRIPT_DIR.parent / "data"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
 VALIDATIONS_DIR = COMPANY_DATA_DIR / "web_presence_validations"
-NAF_CODES_FILE = SCRIPT_DIR / "naf_codes.csv"
+NAF_CODES_FILE = SIREN_INFOS_DIR / "naf_codes.csv"
 
 
 def slugify(text: str) -> str:
