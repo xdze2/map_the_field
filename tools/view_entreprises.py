@@ -217,31 +217,41 @@ def print_full_results(results: list, naf_dict: dict):
     help="Output as JSON",
 )
 def view(file: Optional[str], limit: Optional[int], format: str, output_json: bool):
-    """View downloaded enterprise data from JSONL files."""
+    """View downloaded enterprise data from JSONL files.
 
-    if not file:
-        # List available files
-        if not RAW_DIR.exists():
+    Pass a file path to view a single file, or a directory to load all JSONL files.
+    If neither is specified, defaults to data/raw/searches/.
+    """
+
+    # Determine which path to use
+    if file:
+        filepath = Path(file)
+        if not filepath.exists():
+            raise click.ClickException(f"Path not found: {file}")
+    else:
+        filepath = RAW_DIR
+        if not filepath.exists():
             click.echo("No data downloaded yet. Use download_entreprises.py to download data.", err=True)
             return
 
-        files = list(RAW_DIR.glob("*.jsonl"))
-        if not files:
-            click.echo("No JSONL files found in data/raw/searches/", err=True)
+    # Load results
+    if filepath.is_file():
+        # Single file
+        click.echo(f"Loading {filepath.name}...", err=True)
+        results = load_jsonl(filepath)
+    else:
+        # Directory - load all JSONL files
+        jsonl_files = sorted(filepath.glob("*.jsonl"))
+        if not jsonl_files:
+            click.echo(f"No JSONL files found in {filepath}", err=True)
             return
 
-        click.echo("Available files:", err=True)
-        for f in sorted(files):
-            size = f.stat().st_size
-            click.echo(f"  {f.name} ({size:,} bytes)", err=True)
-        return
+        click.echo(f"Loading {len(jsonl_files)} file(s) from {filepath}...", err=True)
+        results = []
+        for jsonl_file in jsonl_files:
+            click.echo(f"  {jsonl_file.name}", err=True)
+            results.extend(load_jsonl(jsonl_file))
 
-    filepath = Path(file)
-    if not filepath.exists():
-        raise click.ClickException(f"File not found: {file}")
-
-    click.echo(f"Loading {filepath.name}...", err=True)
-    results = load_jsonl(filepath)
     total_results = len(results)
 
     if not results:

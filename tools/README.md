@@ -56,20 +56,23 @@ Files are saved to `data/raw/searches/` with automatic pagination. Metadata is l
 Browse downloaded data (condensed by default):
 
 ```bash
-# List available files
+# View all files in default directory (data/raw/searches/)
 python view_entreprises.py
 
-# View with condensed output (name, age, activity, size, directors)
+# View a single file
 python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl
 
-# View full details
-python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --format full
+# View all files in a directory
+python view_entreprises.py --file data/raw/searches/
+
+# View with full details
+python view_entreprises.py --file data/raw/searches/ --format full
 
 # Limit results
-python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --limit 10
+python view_entreprises.py --file data/raw/searches/ --limit 10
 
 # Output as JSON
-python view_entreprises.py --file data/raw/searches/postal_75015_2026-04-25.jsonl --json
+python view_entreprises.py --file data/raw/searches/ --json
 ```
 
 ## Output Examples
@@ -121,7 +124,7 @@ python view_entreprises.py --help
 
 ```
 Options:
-  -f, --file PATH             Path to JSONL file (if not specified, lists available files)
+  -f, --file PATH             Path to JSONL file or directory (if not specified, uses data/raw/searches/)
   -l, --limit INTEGER         Maximum results to display
   --format [condensed|full]   Output format  [default: condensed]
   --json                      Output as JSON
