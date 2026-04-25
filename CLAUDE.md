@@ -36,12 +36,16 @@ When asked to explore, discover, or research:
   - `requirements.txt` — Python dependencies
   - `download_entreprises.py` — Download companies from Recherche d'Entreprises API
   - `view_entreprises.py` — View/filter downloaded JSONL data (filters out closed companies by default)
-  - `search_internet.py` — Search for company websites via DuckDuckGo
+  - `search_duckduckgo.py` — Search for company websites via DuckDuckGo
   - `naf_categories.yaml` — NAF activity categories for filtering
   - `naf_codes.csv` — Full NAF code reference
 - `/data/raw/searches/` — Downloaded JSONL data (`.gitignore`d)
   - `*.jsonl` — one enterprise per line, full API response
   - `metadata/search_log.jsonl` — search parameters & result counts
+- `/data/company_data/` — Company triage and research data
+  - `ddg_searches/` — Full DuckDuckGo search results (JSON files)
+  - `insights/` — Decision files (CSV format)
+    - `status.csv` — SIREN, status, reason, notes, date, author (append-only)
 
 ## Workflow
 
@@ -88,11 +92,12 @@ python tools/view_entreprises.py --file data/raw/searches/ --format condensed
 **Search for company websites:**
 ```bash
 source tools/venv/bin/activate
-python tools/search_internet.py SIREN_ID
+python tools/search_duckduckgo.py SIREN_ID
 ```
 
 **Notes:**
 - All scripts require activation of `tools/venv/` first
 - Downloaded data stored in `/data/raw/searches/` (not version controlled)
 - Scripts filter out closed companies by default
-- DuckDuckGo blacklist editable in `search_internet.py`
+- DDG results auto-saved to `/data/company_data/ddg_searches/` for triage
+- Decision log (`status.csv`) is append-only for audit trail
