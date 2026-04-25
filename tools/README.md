@@ -27,6 +27,37 @@ pip install -r requirements.txt
 python search_entreprises.py --postal-code 75015
 ```
 
+### Search with NAF Category Filter
+
+Filter by data science relevant NAF codes:
+
+```bash
+# Core tech companies (software dev, consulting)
+python search_entreprises.py -p 75015 --naf-category core-tech
+
+# Data infrastructure companies
+python search_entreprises.py -p 75015 --naf-category data
+
+# Research organizations (including social science R&D)
+python search_entreprises.py -p 75015 --naf-category research
+
+# All consulting companies
+python search_entreprises.py -p 75015 --naf-category consulting
+```
+
+### Search with Specific NAF Codes
+
+```bash
+# Single code
+python search_entreprises.py -p 75015 --naf 62.01Z
+
+# Multiple codes (repeated option)
+python search_entreprises.py -p 75015 --naf 62.01Z --naf 62.02A
+
+# Multiple codes (comma-separated)
+python search_entreprises.py -p 75015 --naf "62.01Z,62.02A"
+```
+
 ### Search with Query Filter
 
 ```bash
@@ -82,11 +113,25 @@ Found 3 entreprises:
    Adresse: 22-30 22 AVENUE DE WAGRAM 75008 PARIS
 ```
 
+## NAF Categories for Data Science
+
+Predefined NAF categories with codes relevant for data science job search:
+
+| Category | NAF Codes | Description |
+|----------|-----------|-------------|
+| **core-tech** | 62.01Z, 62.02A, 62.09Z, 58.29B | Software dev, IT consulting, software publishing |
+| **data** | 63.11Z, 63.12Z, 84.13Z | Data processing, cloud hosting, market research |
+| **research** | 72.11Z, 72.19Z, 72.20Z | Biotech, science, social science R&D |
+| **consulting** | 70.22Z, 73.11Z | Management consulting, advertising/ad tech |
+
+See [data_science_naf_codes.csv](data_science_naf_codes.csv) for the full list with relevance ratings.
+
 ## Features
 
 - ✅ No registration required (free API)
 - ✅ Automatic rate limiting (respects API limits)
 - ✅ NAF code decoding (shows human-readable activity descriptions)
+- ✅ **Filter by NAF category or code** (for targeted job search)
 - ✅ Search by postal code or query
 - ✅ Text and JSON output formats
 - ✅ Configurable result limits

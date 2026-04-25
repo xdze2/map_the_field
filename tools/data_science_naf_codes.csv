@@ -1,0 +1,14 @@
+code,description,category,relevance
+62.01Z,Programmation informatique,Core Tech,High
+62.02A,Conseil en systèmes et logiciels informatiques,Core Tech,High
+62.02B,Tierce maintenance de systèmes et d'applications informatiques,Core Tech,Medium
+62.09Z,Autres activités informatiques,Core Tech,High
+58.29B,Édition de logiciels outils de développement et de langages,Core Tech,High
+63.11Z,Traitement de données et hébergement informatique,Data Infrastructure,High
+63.12Z,Hébergement web et infrastructure,Data Infrastructure,High
+84.13Z,Études de marché et sondages d'opinion,Data-Specific,High
+72.11Z,Recherche-développement en biotechnologie,Research & R&D,Medium
+72.19Z,Recherche-développement en autres sciences physiques et naturelles,Research & R&D,Medium
+72.20Z,Recherche-développement en sciences humaines et sociales,Research & R&D,High
+70.22Z,Conseil en gestion et management,Consulting,Medium
+73.11Z,Agences de publicité,Adjacent,Low
