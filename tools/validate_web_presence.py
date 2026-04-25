@@ -5,7 +5,7 @@ import csv
 import yaml
 from pathlib import Path
 from datetime import datetime
-import re
+from utils import slugify, is_directory
 
 SCRIPT_DIR = Path(__file__).parent
 SIREN_INFOS_DIR = SCRIPT_DIR / "siren_infos"
@@ -14,13 +14,6 @@ COMPANY_DATA_DIR = DATA_DIR / "company_data"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
 VALIDATIONS_DIR = COMPANY_DATA_DIR / "web_presence_validations"
 NAF_CODES_FILE = SIREN_INFOS_DIR / "naf_codes.csv"
-
-
-def slugify(text: str) -> str:
-	"""Convert text to URL-friendly slug."""
-	slug = re.sub(r'[^\w\s-]', '', text.lower())
-	slug = re.sub(r'[-\s]+', '-', slug)
-	return slug.strip('-')
 
 
 def load_naf_descriptions() -> dict:
@@ -135,20 +128,6 @@ def extract_official_data(company_info: dict, naf_map: dict) -> dict:
 	}
 
 
-def is_directory(url: str) -> bool:
-	"""Check if URL is a known directory/annuaire domain."""
-	directory_domains = {
-		"societe.com", "verif.com", "sirene.data.gouv.fr", "infogreffe.fr",
-		"pagesjaunes.fr", "kompass.com", "europages.fr", "viadeo.com",
-		"linkedin.com", "pappers.fr", "lefigaro.fr", "infonet.fr",
-		"lagazettefrance.fr", "hoodspot.fr", "eterritoire.fr", "gouv.fr",
-	}
-	for domain in directory_domains:
-		if domain in url.lower():
-			return True
-	return False
-
-
 def get_domain_type(url: str) -> str:
 	"""Classify domain type based on URL."""
 	if is_directory(url):
@@ -166,10 +145,10 @@ def prepare_results(results: list) -> list:
 		annotated.append({
 			'rank': i,
 			'title': result.get('title', ''),
-			'url': result.get('href', ''),
-			'snippet': result.get('body', ''),
+			'url': result.get('url', ''),
+			'snippet': result.get('snippet', ''),
 			'relevance': 'medium',  # Claude will assess
-			'domain_type': get_domain_type(result.get('href', '')),
+			'domain_type': get_domain_type(result.get('url', '')),
 		})
 	return annotated
 
