@@ -9,8 +9,8 @@ import re
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
-RAW_DIR = DATA_DIR / "raw" / "searches"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
+SIRENE_SEARCHES_DIR = COMPANY_DATA_DIR / "sirene_searches"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
 
 # Known directory/annuaire domains to filter out
@@ -36,13 +36,13 @@ DIRECTORY_BLACKLIST = {
 
 def find_company_in_local_data(siren: str) -> dict:
     """Find company by SIREN in local JSONL files. Returns company dict or raises error."""
-    if not RAW_DIR.exists():
-        raise click.ClickException(f"No data directory found: {RAW_DIR}")
+    if not SIRENE_SEARCHES_DIR.exists():
+        raise click.ClickException(f"No data directory found: {SIRENE_SEARCHES_DIR}")
 
-    jsonl_files = sorted(RAW_DIR.glob("*.jsonl"))
+    jsonl_files = sorted(SIRENE_SEARCHES_DIR.glob("*.jsonl"))
     if not jsonl_files:
         raise click.ClickException(
-            f"No downloaded data found in {RAW_DIR}\n"
+            f"No downloaded data found in {SIRENE_SEARCHES_DIR}\n"
             "Use download_entreprises.py to fetch companies first."
         )
 
@@ -80,7 +80,7 @@ def build_search_query(company_name: str, postal_code: str) -> str:
 def search_company_website(query: str) -> list:
     """Search for company website using DuckDuckGo. Returns list of results."""
     try:
-        results = DDGS().text(query, max_results=20)
+        results = DDGS().text(query, max_results=20, region="fr-fr")
         return results if results else []
     except Exception as e:
         raise click.ClickException(f"Search failed: {e}")
@@ -117,7 +117,7 @@ def filter_results(results: list, blacklist_query: bool = False) -> list:
     return filtered
 
 
-def save_ddg_results(siren: str, company_name: str, results: list) -> None:
+def save_ddg_results(siren: str, company_name: str, results: list, company_info: dict) -> None:
     """Save full DDG results to JSON file with metadata."""
     DDG_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
     slug = slugify(company_name)
@@ -131,6 +131,7 @@ def save_ddg_results(siren: str, company_name: str, results: list) -> None:
         "company_name": company_name,
         "slug": slug,
         "search_date": search_date_epoch,
+        "company_info": company_info,
         "results": results,
     }
 
@@ -207,7 +208,7 @@ def search(siren: str, show_all: bool):
         raise click.ClickException("No search results found")
 
     # Step 3: Save full results
-    save_ddg_results(siren, nom, results)
+    save_ddg_results(siren, nom, results, company)
 
     # Step 4: Filter results for display
     if show_all:
