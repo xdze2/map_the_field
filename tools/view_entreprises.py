@@ -288,7 +288,12 @@ _SIZE_HELP = (
     multiple=True,
     help=_SIZE_HELP,
 )
-def view(file: Optional[str], limit: Optional[int], format: str, size: tuple):
+@click.option(
+    "--sirens-only",
+    is_flag=True,
+    help="Output only SIREN numbers, one per line (for piping to xargs)",
+)
+def view(file: Optional[str], limit: Optional[int], format: str, size: tuple, sirens_only: bool):
     """View downloaded SIREN enterprise data from JSONL files.
 
     Pass a file path to view a single file, or a directory to load all JSONL files.
@@ -364,6 +369,11 @@ def view(file: Optional[str], limit: Optional[int], format: str, size: tuple):
     if excluded_size:
         summary += f" ({excluded_size} filtered by size)"
     click.echo(f"{summary}\n", err=True)
+
+    if sirens_only:
+        for enterprise in results:
+            click.echo(enterprise.get("siren", ""))
+        return
 
     naf_dict = load_naf_codes()
 

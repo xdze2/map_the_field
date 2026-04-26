@@ -91,6 +91,11 @@ def filter_results(results: list) -> tuple:
     return filtered, excluded
 
 
+def already_searched(siren: str) -> bool:
+    """Return True if a DDG result file already exists for this SIREN."""
+    return bool(list(DDG_SEARCHES_DIR.glob(f"ddg_search_{siren}_*.json"))) if DDG_SEARCHES_DIR.exists() else False
+
+
 def save_ddg_results(siren: str, company_name: str, search_data: dict) -> None:
     """Save full DDG results to JSON file with metadata."""
     DDG_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
@@ -159,14 +164,26 @@ def print_candidates(company_name: str, siren: str, candidates: list):
     default="fr-fr",
     help="DuckDuckGo region code (default: fr-fr)",
 )
-def search(siren: str, show_all: bool, max_results: int, region: str):
+@click.option(
+    "--skip-existing",
+    is_flag=True,
+    default=True,
+    help="Skip SIRENs that already have a DDG result file (default: on)",
+)
+def search(siren: str, show_all: bool, max_results: int, region: str, skip_existing: bool):
     """Search for a company website by SIREN.
 
     Looks up company in local downloads, then searches for website using postal code + company name.
     By default, filters out known directories (societe.com, etc).
 
     Auto-saves full DDG results to /data/company_data/ddg_searches/ as JSON with metadata.
+
+    Exits with code 1 on any error (compatible with xargs -I{} sh -c '... || exit 255').
     """
+    if skip_existing and already_searched(siren):
+        click.echo(f"[skip] {siren} — DDG file already exists", err=True)
+        return
+
     company = find_company_in_local_data(siren)
 
     nom = company.get("nom_complet", "")
