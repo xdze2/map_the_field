@@ -22,3 +22,7 @@ https://dataemploi.francetravail.fr/emploi/accueil
 
 
 https://francetravail.io/produits-partages/catalogue/offres-emploi
+
+
+Wiki data + siren
+https://www.wikidata.org/wiki/Q3508142?uselang=fr#identifiers

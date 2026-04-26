@@ -255,12 +255,14 @@ def already_summarized(siren: str) -> bool:
     default=True,
     help="Skip SIRENs that already have a summary YAML",
 )
+@click.option("--all", "process_all", is_flag=True, help="Process all files in ddg_searches/")
 @click.argument("sirens", nargs=-1)
-def validate(provider, model, llamacpp_url, skip_existing, dry_run, sirens):
+def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all, sirens):
     """Build company summary cards from DDG search results using a local LLM.
 
-    If SIRENs are provided, process only those. Otherwise process all DDG files.
-    YAML cards are saved to data/company_data/web_presence_validations/.
+    Pass SIREN numbers to process specific companies, or use --all to process
+    every file in ddg_searches/. YAML cards are saved to
+    data/company_data/web_presence_validations/.
     """
     if model is None:
         model = OLLAMA_MODEL if provider == "ollama" else LLAMACPP_MODEL
@@ -269,7 +271,9 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, sirens):
 
     naf_map = load_naf_descriptions()
 
-    if sirens:
+    if process_all:
+        files = find_ddg_files()
+    elif sirens:
         files = []
         for siren in sirens:
             matches = sorted(DDG_SEARCHES_DIR.glob(f"ddg_search_{siren}_*.json"))
@@ -278,7 +282,8 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, sirens):
             else:
                 files.append(matches[-1])
     else:
-        files = find_ddg_files()
+        click.echo("Provide SIREN numbers or use --all to process every DDG file.", err=True)
+        raise SystemExit(1)
 
     click.echo(f"Found {len(files)} DDG file(s) to process.", err=True)
 
