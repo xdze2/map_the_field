@@ -72,14 +72,16 @@ def check_rate_limit():
     check_rate_limit.last_request = time.time()
 
 
-def generate_filename(postal_code: str, naf_filter: Optional[str], query: str) -> str:
+def generate_filename(postal_code: str, naf_filter: Optional[str], query: str, naf_category: Optional[str] = None) -> str:
     """Generate JSONL filename based on search parameters."""
     parts = [f"postal_{postal_code}"]
 
     if naf_filter:
-        # Use first NAF code as identifier
-        first_code = naf_filter.split(",")[0]
-        parts.append(f"naf_{first_code.replace('.', '-')}")
+        if naf_category and naf_category != "all":
+            parts.append(f"cat_{naf_category}")
+        else:
+            first_code = naf_filter.split(",")[0]
+            parts.append(f"naf_{first_code.replace('.', '-')}")
 
     if query:
         parts.append(f"query_{query[:20]}")
@@ -89,11 +91,11 @@ def generate_filename(postal_code: str, naf_filter: Optional[str], query: str) -
     return "_".join(parts) + ".jsonl"
 
 
-def download_all_pages(postal_code: str, naf_filter: Optional[str], query: str) -> tuple:
+def download_all_pages(postal_code: str, naf_filter: Optional[str], query: str, naf_category: Optional[str] = None) -> tuple:
     """Download all pages for a search query. Returns (total_results, results_count)."""
     SIRENE_SEARCHES_DIR.mkdir(parents=True, exist_ok=True)
 
-    filename = generate_filename(postal_code, naf_filter, query)
+    filename = generate_filename(postal_code, naf_filter, query, naf_category)
     filepath = SIRENE_SEARCHES_DIR / filename
 
     click.echo(f"Downloading to {filepath}", err=True)
@@ -200,7 +202,7 @@ def download(postal_code: str, query: str, naf: tuple, naf_category: str):
     if naf_filter:
         click.echo(f"NAF filter: {naf_filter}", err=True)
 
-    total_results, downloaded_count = download_all_pages(postal_code, naf_filter, query)
+    total_results, downloaded_count = download_all_pages(postal_code, naf_filter, query, naf_category)
 
     click.echo(f"\n✓ Complete: {downloaded_count}/{total_results} results saved", err=True)
 
