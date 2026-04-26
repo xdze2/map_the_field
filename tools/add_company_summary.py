@@ -14,7 +14,7 @@ SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
-VALIDATIONS_DIR = COMPANY_DATA_DIR / "web_presence_validations"
+SUMMARIES_DIR = COMPANY_DATA_DIR / "company_summaries"
 
 OLLAMA_MODEL = "qwen3:4b"
 LLAMACPP_MODEL = "qwen2.5-3b-instruct-q4_k_m.gguf"
@@ -22,7 +22,7 @@ LLAMACPP_URL = "http://localhost:8083/v1"
 
 PROMPT_TEMPLATE = """You are building a company description card from web search results, for a company from the French official registry (SIREN).
 
-Official registry data:
+Official registry data (already recorded — do not repeat in your answer):
 - Name: {name}
 - Activity (NAF code): {naf_code} — {naf_description}
 - City: {city} ({postal_code})
@@ -31,13 +31,18 @@ Official registry data:
 Web search results:
 {results_block}
 
-Write a short factual summary (1-3 sentences) of what this company does, based on the search results.
-If the results clearly don't match this company or are too vague, explain why.
-Pick the single best URL that gives the most information about this company (official site or Wikipedia preferred over aggregators like Jooble, AirSaas, Motherbase).
+Instructions:
+- SUMMARY: 1-3 sentences on what the company concretely does — its product, service, or mission. Do not repeat the city, NAF label, or legal form. If results don't clearly match this company, say so briefly.
+- TYPE: classify the company as one of: product-company / esn-consulting / research-lab / association / public-sector / unclear
+- KEYWORDS: 3-5 comma-separated tags describing the domain or tech (e.g. NLP, open-source, B2B-SaaS, embedded, data-engineering, climate)
+- BEST_URL: the single URL from the results that gives the most direct information about this company (official site preferred; only pick Wikipedia if the article title clearly names this company; otherwise NONE)
+- CONFIDENCE: how well the results match this company — good / maybe / weak
 
-Reply in exactly this format (3 lines, no other text):
-BEST_URL: <url from the results above, or NONE>
+Reply in exactly this format (5 lines, no other text):
+BEST_URL: <url or NONE>
 CONFIDENCE: <good|maybe|weak>
+TYPE: <product-company|esn-consulting|research-lab|association|public-sector|unclear>
+KEYWORDS: <tag1, tag2, tag3>
 SUMMARY: <1-3 sentences>
 """
 
@@ -136,11 +141,11 @@ def build_prompt(company_info: dict, results: list, naf_map: dict) -> str:
     )
 
 
-def parse_response(text: str) -> tuple[str, str, str]:
-    """Parse BEST_URL / CONFIDENCE / SUMMARY from model output."""
+def parse_response(text: str) -> tuple[str, str, str, str, str]:
+    """Parse BEST_URL / CONFIDENCE / TYPE / KEYWORDS / SUMMARY from model output."""
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    best_url, confidence, summary = "NONE", "weak", ""
+    best_url, confidence, company_type, keywords, summary = "NONE", "weak", "unclear", "", ""
     for line in text.strip().splitlines():
         line = line.strip()
         if line.startswith("BEST_URL:"):
@@ -149,9 +154,15 @@ def parse_response(text: str) -> tuple[str, str, str]:
             raw = line.split(":", 1)[1].strip().lower()
             if raw in ("good", "maybe", "weak"):
                 confidence = raw
+        elif line.startswith("TYPE:"):
+            raw = line.split(":", 1)[1].strip().lower()
+            valid = ("product-company", "esn-consulting", "research-lab", "association", "public-sector", "unclear")
+            company_type = raw if raw in valid else "unclear"
+        elif line.startswith("KEYWORDS:"):
+            keywords = line.split(":", 1)[1].strip()
         elif line.startswith("SUMMARY:"):
             summary = line.split(":", 1)[1].strip()
-    return best_url, confidence, summary
+    return best_url, confidence, company_type, keywords, summary
 
 
 def call_ollama(model: str, prompt: str) -> str:
@@ -182,6 +193,8 @@ def save_summary_yaml(
     siren: str,
     slug: str,
     confidence: str,
+    company_type: str,
+    keywords: str,
     official_data: dict,
     web_results: list,
     best_url: str,
@@ -191,12 +204,12 @@ def save_summary_yaml(
     raw_response: str = "",
     elapsed_s: float | None = None,
 ) -> Path:
-    VALIDATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
     grp_size = (official_data.get("size_category") or "").lower() or "unk"
     city = (official_data.get("location", {}).get("city") or "").lower().replace(" ", "-") or "unk"
-    filepath = VALIDATIONS_DIR / f"{siren}_{slug}_{grp_size}_{city}_{confidence}_{timestamp}.yaml"
+    filepath = SUMMARIES_DIR / f"{siren}_{slug}_{grp_size}_{city}_{confidence}_{timestamp}.yaml"
 
     yaml_data = {
         "meta": {
@@ -217,6 +230,8 @@ def save_summary_yaml(
         },
         "summary": {
             "confidence": confidence,
+            "type": company_type,
+            "keywords": keywords,
             "best_url": best_url,
             "summary": summary,
             "elapsed_s": round(elapsed_s, 2) if elapsed_s is not None else None,
@@ -236,7 +251,7 @@ def save_summary_yaml(
 
 
 def already_summarized(siren: str) -> bool:
-    return bool(list(VALIDATIONS_DIR.glob(f"{siren}_*.yaml"))) if VALIDATIONS_DIR.exists() else False
+    return bool(list(SUMMARIES_DIR.glob(f"{siren}_*.yaml"))) if SUMMARIES_DIR.exists() else False
 
 
 @click.command()
@@ -322,14 +337,16 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all,
             continue
         elapsed_s = time.perf_counter() - t0
 
-        best_url, confidence, summary = parse_response(raw)
-        click.echo(f"  → {confidence.upper():8s}  {elapsed_s:.1f}s  {summary[:80]}", err=True)
+        best_url, confidence, company_type, keywords, summary = parse_response(raw)
+        click.echo(f"  → {confidence.upper():8s}  [{company_type}]  {elapsed_s:.1f}s  {summary[:60]}", err=True)
 
         official_data = extract_official_data(company_info, naf_map)
         yaml_path = save_summary_yaml(
             siren=siren,
             slug=slug,
             confidence=confidence,
+            company_type=company_type,
+            keywords=keywords,
             official_data=official_data,
             web_results=results[:8],
             best_url=best_url,
@@ -341,7 +358,7 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all,
         click.echo(f"  → YAML: {yaml_path.name}", err=True)
 
     if not dry_run:
-        click.echo(f"\nDone. YAMLs saved to {VALIDATIONS_DIR}", err=True)
+        click.echo(f"\nDone. YAMLs saved to {SUMMARIES_DIR}", err=True)
 
 
 if __name__ == "__main__":

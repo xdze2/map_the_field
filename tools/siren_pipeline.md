@@ -7,7 +7,7 @@ Three-step pipeline to discover and characterize companies near a given location
 ```
 download_entreprises.py  →  search_duckduckgo.py  →  add_company_summary.py
         ↓                          ↓                          ↓
-  sirene_searches/*.jsonl   ddg_searches/*.json    web_presence_validations/*.yaml
+  sirene_searches/*.jsonl   ddg_searches/*.json    company_summaries/*.yaml
 ```
 
 ## Steps
@@ -77,7 +77,7 @@ The LLM returns three fields parsed from its response:
 - `CONFIDENCE` — `good` / `maybe` / `weak`
 - `SUMMARY` — 1–3 sentence factual description
 
-Output: `data/company_data/web_presence_validations/{siren}_{slug}_{size}_{city}_{confidence}_{timestamp}.yaml`
+Output: `data/company_data/company_summaries/{siren}_{slug}_{size}_{city}_{confidence}_{timestamp}.yaml`
 
 Each YAML contains: meta (siren, author tag, dates), company (name, city, size, NAF, ESS/association flags), summary (confidence, best URL, text, elapsed time), and the top 8 search results.
 
@@ -108,7 +108,7 @@ python tools/add_company_summary.py --all
 |-----------|----------|-----------|
 | `data/company_data/sirene_searches/` | Raw SIREN API results (JSONL) | No |
 | `data/company_data/ddg_searches/` | DuckDuckGo results per company (JSON) | No |
-| `data/company_data/web_presence_validations/` | LLM summary YAML cards | No |
+| `data/company_data/company_summaries/` | LLM summary YAML cards | No |
 | `data/company_data/insights/status.csv` | Triage decisions (append-only) | Yes |
 
 ---
