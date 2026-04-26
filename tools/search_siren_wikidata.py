@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import click
+import csv
 import requests
 import yaml
+from datetime import datetime
 from pathlib import Path
 from utils import slugify
 
@@ -10,6 +12,7 @@ SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 WIKIDATA_DIR = DATA_DIR / "company_data" / "wikidata_searches"
+NO_ENTRY_CSV = WIKIDATA_DIR / "no_wiki_entry.csv"
 
 QUERY = """
 SELECT ?item ?itemLabel ?article WHERE {{
@@ -24,14 +27,17 @@ SELECT ?item ?itemLabel ?article WHERE {{
 
 
 def query_wikidata(siren: str) -> list:
-    response = requests.get(
-        SPARQL_ENDPOINT,
-        params={"query": QUERY.format(siren=siren), "format": "json"},
-        headers={"User-Agent": "map-the-field/1.0 (xdze2.me@gmail.com)"},
-        timeout=10,
-    )
-    response.raise_for_status()
-    return response.json()["results"]["bindings"]
+    try:
+        response = requests.get(
+            SPARQL_ENDPOINT,
+            params={"query": QUERY.format(siren=siren), "format": "json"},
+            headers={"User-Agent": "map-the-field/1.0 (xdze2.me@gmail.com)"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()["results"]["bindings"]
+    except requests.exceptions.Timeout:
+        raise click.ClickException(f"Wikidata SPARQL timed out for SIREN {siren}")
 
 
 def fetch_wikipedia_summary(page_title: str) -> dict:
@@ -79,16 +85,40 @@ def save_results(siren: str, slug: str, page_title: str, data: dict) -> None:
         click.echo(f"Saved {jpeg_path}", err=True)
 
 
+def log_no_entry(siren: str, slug: str) -> None:
+    WIKIDATA_DIR.mkdir(parents=True, exist_ok=True)
+    write_header = not NO_ENTRY_CSV.exists()
+    with open(NO_ENTRY_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(["siren", "slug", "timestamp"])
+        writer.writerow([siren, slug, datetime.now().isoformat(timespec="seconds")])
+
+
+def already_searched(siren: str) -> bool:
+    if WIKIDATA_DIR.exists() and list(WIKIDATA_DIR.glob(f"{siren}_*.yaml")):
+        return True
+    if NO_ENTRY_CSV.exists():
+        with open(NO_ENTRY_CSV, newline="", encoding="utf-8") as f:
+            return any(row["siren"] == siren for row in csv.DictReader(f))
+    return False
+
+
 @click.command()
 @click.argument("siren", required=True)
 def search(siren: str):
     """Look up a SIREN number on Wikidata. Prints and saves summary + thumbnail if found."""
+    if already_searched(siren):
+        click.echo(f"[skip] {siren} — already searched", err=True)
+        return
+
     click.echo(f"Querying Wikidata for SIREN {siren}...", err=True)
 
     results = query_wikidata(siren)
 
     if not results:
         click.echo(f"[not found] No Wikidata entry for SIREN {siren}")
+        log_no_entry(siren, "")
         return
 
     for row in results:
