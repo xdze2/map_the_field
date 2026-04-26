@@ -3,6 +3,7 @@
 import csv
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -211,6 +212,7 @@ def save_validation_yaml(
     author_tag: str,
     search_date: str | None,
     raw_response: str = "",
+    elapsed_s: float | None = None,
 ) -> Path:
     VALIDATIONS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
@@ -228,6 +230,7 @@ def save_validation_yaml(
             "match": match,
             "reason": reason,
             "raw_response": raw_response,
+            "elapsed_s": round(elapsed_s, 2) if elapsed_s is not None else None,
         },
         "official_data": official_data,
         "web_results": web_results,
@@ -339,6 +342,7 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sir
             continue
 
         click.echo(f"[llm]   {siren} {name} ...", err=True)
+        t0 = time.perf_counter()
         try:
             if provider == "ollama":
                 raw = call_ollama(model, prompt)
@@ -347,9 +351,10 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sir
         except Exception as e:
             click.echo(f"  ERROR calling {provider}: {e}", err=True)
             continue
+        elapsed_s = time.perf_counter() - t0
 
         match, confidence, reason = parse_response(raw)
-        click.echo(f"  → {confidence.upper():8s}  match={match}  {reason}", err=True)
+        click.echo(f"  → {confidence.upper():8s}  match={match}  {elapsed_s:.1f}s  {reason}", err=True)
 
         append_status(siren, confidence, reason, name, author_tag)
 
@@ -366,6 +371,7 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sir
                 author_tag=author_tag,
                 search_date=data.get("search_date"),
                 raw_response=raw,
+                elapsed_s=elapsed_s,
             )
             click.echo(f"  → YAML: {yaml_path.name}", err=True)
 
