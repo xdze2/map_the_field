@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Validate company web presence using a local LLM (Ollama or llama.cpp)."""
-import csv
+"""Build company summary cards from DDG search results using a local LLM."""
 import json
 import re
 import time
@@ -16,13 +15,12 @@ DATA_DIR = SCRIPT_DIR.parent / "data"
 COMPANY_DATA_DIR = DATA_DIR / "company_data"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
 VALIDATIONS_DIR = COMPANY_DATA_DIR / "web_presence_validations"
-STATUS_CSV = COMPANY_DATA_DIR / "insights" / "status.csv"
 
 OLLAMA_MODEL = "qwen3:4b"
 LLAMACPP_MODEL = "qwen2.5-3b-instruct-q4_k_m.gguf"
 LLAMACPP_URL = "http://localhost:8083/v1"
 
-PROMPT_TEMPLATE = """You are validating whether web search results match a company from the French official registry (SIREN).
+PROMPT_TEMPLATE = """You are building a company description card from web search results, for a company from the French official registry (SIREN).
 
 Official registry data:
 - Name: {name}
@@ -33,12 +31,14 @@ Official registry data:
 Web search results:
 {results_block}
 
-Does any result clearly match this company (same name, same city, same activity)?
+Write a short factual summary (1-3 sentences) of what this company does, based on the search results.
+If the results clearly don't match this company or are too vague, explain why.
+Pick the single best URL that gives the most information about this company (official site or Wikipedia preferred over aggregators like Jooble, AirSaas, Motherbase).
 
 Reply in exactly this format (3 lines, no other text):
-MATCH: <result number 1-{n_results} or NONE>
-CONFIDENCE: <good|strange|wrong>
-REASON: <one sentence>
+BEST_URL: <url from the results above, or NONE>
+CONFIDENCE: <good|maybe|weak>
+SUMMARY: <1-3 sentences>
 """
 
 
@@ -62,7 +62,7 @@ def extract_official_data(company_info: dict, naf_map: dict) -> dict:
     return {
         "siren": company_info.get("siren"),
         "name": company_info.get("nom_complet"),
-        "name_short": company_info.get("sigle"),
+        "size_category": company_info.get("categorie_entreprise"),
         "activity": {
             "code": primary_naf,
             "code_naf25": company_info.get("activite_principale_naf25"),
@@ -137,21 +137,21 @@ def build_prompt(company_info: dict, results: list, naf_map: dict) -> str:
 
 
 def parse_response(text: str) -> tuple[str, str, str]:
-    """Parse MATCH / CONFIDENCE / REASON from model output."""
+    """Parse BEST_URL / CONFIDENCE / SUMMARY from model output."""
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    match, confidence, reason = "NONE", "strange", ""
+    best_url, confidence, summary = "NONE", "weak", ""
     for line in text.strip().splitlines():
         line = line.strip()
-        if line.startswith("MATCH:"):
-            match = line.split(":", 1)[1].strip()
+        if line.startswith("BEST_URL:"):
+            best_url = line.split(":", 1)[1].strip()
         elif line.startswith("CONFIDENCE:"):
             raw = line.split(":", 1)[1].strip().lower()
-            if raw in ("good", "strange", "wrong"):
+            if raw in ("good", "maybe", "weak"):
                 confidence = raw
-        elif line.startswith("REASON:"):
-            reason = line.split(":", 1)[1].strip()
-    return match, confidence, reason
+        elif line.startswith("SUMMARY:"):
+            summary = line.split(":", 1)[1].strip()
+    return best_url, confidence, summary
 
 
 def call_ollama(model: str, prompt: str) -> str:
@@ -178,14 +178,14 @@ def call_llamacpp(model: str, url: str, prompt: str) -> str:
     return response.choices[0].message.content
 
 
-def save_validation_yaml(
+def save_summary_yaml(
     siren: str,
     slug: str,
     confidence: str,
     official_data: dict,
     web_results: list,
-    match: str,
-    reason: str,
+    best_url: str,
+    summary: str,
     author_tag: str,
     search_date: str | None,
     raw_response: str = "",
@@ -193,24 +193,38 @@ def save_validation_yaml(
 ) -> Path:
     VALIDATIONS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    filepath = VALIDATIONS_DIR / f"{siren}_{slug}_{timestamp}_{confidence}.yaml"
+
+    grp_size = (official_data.get("size_category") or "").lower() or "unk"
+    city = (official_data.get("location", {}).get("city") or "").lower().replace(" ", "-") or "unk"
+    filepath = VALIDATIONS_DIR / f"{siren}_{slug}_{grp_size}_{city}_{confidence}_{timestamp}.yaml"
 
     yaml_data = {
         "meta": {
             "siren": siren,
-            "validated_at": timestamp,
+            "slug": slug,
+            "generated_at": timestamp,
             "author": author_tag,
             "ddg_search_date": search_date,
         },
-        "assessment": {
+        "company": {
+            "name": official_data.get("name"),
+            "city": official_data.get("location", {}).get("city"),
+            "size_category": official_data.get("size_category"),
+            "naf_code": official_data.get("activity", {}).get("code"),
+            "naf_label": official_data.get("activity", {}).get("description"),
+            "is_ess": official_data.get("legal_status", {}).get("is_ess"),
+            "is_association": official_data.get("legal_status", {}).get("is_association"),
+        },
+        "summary": {
             "confidence": confidence,
-            "match": match,
-            "reason": reason,
-            "raw_response": raw_response,
+            "best_url": best_url,
+            "summary": summary,
             "elapsed_s": round(elapsed_s, 2) if elapsed_s is not None else None,
         },
-        "official_data": official_data,
-        "web_results": web_results,
+        "search_results": [
+            {"url": r.get("url"), "title": r.get("title"), "snippet": r.get("snippet")}
+            for r in web_results
+        ],
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -221,33 +235,8 @@ def save_validation_yaml(
     return filepath
 
 
-def append_status(
-    siren: str, confidence: str, reason: str, name: str, author_tag: str
-) -> None:
-    STATUS_CSV.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not STATUS_CSV.exists()
-    with open(STATUS_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(["siren", "status", "reason", "notes", "date", "author"])
-        writer.writerow(
-            [
-                siren,
-                confidence,
-                reason,
-                name,
-                datetime.now().strftime("%Y-%m-%d"),
-                author_tag,
-            ]
-        )
-
-
-def already_validated(siren: str) -> bool:
-    if not STATUS_CSV.exists():
-        return False
-    with open(STATUS_CSV, encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return any(row["siren"] == siren for row in reader)
+def already_summarized(siren: str) -> bool:
+    return bool(list(VALIDATIONS_DIR.glob(f"{siren}_*.yaml"))) if VALIDATIONS_DIR.exists() else False
 
 
 @click.command()
@@ -259,21 +248,19 @@ def already_validated(siren: str) -> bool:
 )
 @click.option("--model", default=None, help="Model name (defaults to provider default)")
 @click.option("--llamacpp-url", default=LLAMACPP_URL, help="llama.cpp server base URL")
+@click.option("--dry-run", is_flag=True, help="Print prompts without calling the LLM")
 @click.option(
     "--skip-existing",
     is_flag=True,
     default=True,
-    help="Skip SIRENs already in status.csv",
+    help="Skip SIRENs that already have a summary YAML",
 )
-@click.option("--dry-run", is_flag=True, help="Print prompts without calling the LLM")
-@click.option("--no-yaml", is_flag=True, help="Skip writing YAML validation reports")
 @click.argument("sirens", nargs=-1)
-def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sirens):
-    """Validate company web presence using a local LLM (Ollama or llama.cpp).
+def validate(provider, model, llamacpp_url, skip_existing, dry_run, sirens):
+    """Build company summary cards from DDG search results using a local LLM.
 
-    If SIRENs are provided, validate only those. Otherwise validate all DDG files.
-    Results are appended to data/company_data/insights/status.csv.
-    YAML reports are saved to data/company_data/web_presence_validations/.
+    If SIRENs are provided, process only those. Otherwise process all DDG files.
+    YAML cards are saved to data/company_data/web_presence_validations/.
     """
     if model is None:
         model = OLLAMA_MODEL if provider == "ollama" else LLAMACPP_MODEL
@@ -302,8 +289,8 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sir
         name = company_info.get("nom_complet", siren)
         slug = data.get("slug", siren)
 
-        if skip_existing and already_validated(siren):
-            click.echo(f"[skip]  {siren} {name} — already in status.csv", err=True)
+        if skip_existing and already_summarized(siren):
+            click.echo(f"[skip]  {siren} {name} — already summarized", err=True)
             continue
 
         results = data.get("results", [])
@@ -330,30 +317,26 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, no_yaml, sir
             continue
         elapsed_s = time.perf_counter() - t0
 
-        match, confidence, reason = parse_response(raw)
-        click.echo(f"  → {confidence.upper():8s}  match={match}  {elapsed_s:.1f}s  {reason}", err=True)
+        best_url, confidence, summary = parse_response(raw)
+        click.echo(f"  → {confidence.upper():8s}  {elapsed_s:.1f}s  {summary[:80]}", err=True)
 
-        append_status(siren, confidence, reason, name, author_tag)
-
-        if not no_yaml:
-            official_data = extract_official_data(company_info, naf_map)
-            yaml_path = save_validation_yaml(
-                siren=siren,
-                slug=slug,
-                confidence=confidence,
-                official_data=official_data,
-                web_results=results[:8],
-                match=match,
-                reason=reason,
-                author_tag=author_tag,
-                search_date=data.get("search_date"),
-                raw_response=raw,
-                elapsed_s=elapsed_s,
-            )
-            click.echo(f"  → YAML: {yaml_path.name}", err=True)
+        official_data = extract_official_data(company_info, naf_map)
+        yaml_path = save_summary_yaml(
+            siren=siren,
+            slug=slug,
+            confidence=confidence,
+            official_data=official_data,
+            web_results=results[:8],
+            best_url=best_url,
+            summary=summary,
+            author_tag=author_tag,
+            search_date=data.get("search_date"),
+            elapsed_s=elapsed_s,
+        )
+        click.echo(f"  → YAML: {yaml_path.name}", err=True)
 
     if not dry_run:
-        click.echo(f"\nDone. Results appended to {STATUS_CSV}", err=True)
+        click.echo(f"\nDone. YAMLs saved to {VALIDATIONS_DIR}", err=True)
 
 
 if __name__ == "__main__":

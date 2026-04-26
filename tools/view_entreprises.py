@@ -26,7 +26,9 @@ def load_naf_codes():
             reader = csv.DictReader(f)
             for row in reader:
                 code = row.get("Code", "").strip()
-                label = row.get(" Intitulés de la  NAF rév. 2, version finale ", "").strip()
+                label = row.get(
+                    " Intitulés de la  NAF rév. 2, version finale ", ""
+                ).strip()
                 if code and label:
                     naf_dict[code] = label
     except Exception as e:
@@ -43,15 +45,30 @@ def decode_naf(code: str, naf_dict: dict) -> str:
 
 
 SIZE_BUCKETS = {
-    "solo":   {"tranches": {"01"},                       "range": "1–2"},
-    "team":   {"tranches": {"02", "03", "11"},           "range": "3–19"},
-    "small":  {"tranches": {"12", "21"},                 "range": "20–99"},
-    "medium": {"tranches": {"22", "31", "32", "41"},     "range": "100–499"},
-    "large":  {"tranches": {"42", "51", "52", "53"},     "range": "500+"},
+    "solo": {"tranches": {"01"}, "range": "1–2"},
+    "team": {"tranches": {"02", "03", "11"}, "range": "3–19"},
+    "small": {"tranches": {"12", "21"}, "range": "20–99"},
+    "medium": {"tranches": {"22", "31", "32", "41"}, "range": "100–499"},
+    "large": {"tranches": {"42", "51", "52", "53"}, "range": "500+"},
 }
 
 # Ordered list used for sorting (unknown/empty sorts last)
-_TRANCHE_ORDER = ["01", "02", "03", "11", "12", "21", "22", "31", "32", "41", "42", "51", "52", "53"]
+_TRANCHE_ORDER = [
+    "01",
+    "02",
+    "03",
+    "11",
+    "12",
+    "21",
+    "22",
+    "31",
+    "32",
+    "41",
+    "42",
+    "51",
+    "52",
+    "53",
+]
 
 
 def get_size_category(tranche_code: str) -> str:
@@ -89,7 +106,9 @@ def filter_by_size(results: list, sizes: tuple) -> tuple:
         if bucket:
             allowed_tranches |= bucket["tranches"]
 
-    filtered = [e for e in results if e.get("tranche_effectif_salarie", "") in allowed_tranches]
+    filtered = [
+        e for e in results if e.get("tranche_effectif_salarie", "") in allowed_tranches
+    ]
     excluded = len(results) - len(filtered)
     return filtered, excluded
 
@@ -97,7 +116,12 @@ def filter_by_size(results: list, sizes: tuple) -> tuple:
 def sort_by_size(results: list) -> list:
     """Sort enterprises from smallest to largest by INSEE tranche code."""
     order = {code: i for i, code in enumerate(_TRANCHE_ORDER)}
-    return sorted(results, key=lambda e: order.get(e.get("tranche_effectif_salarie", ""), len(_TRANCHE_ORDER)))
+    return sorted(
+        results,
+        key=lambda e: order.get(
+            e.get("tranche_effectif_salarie", ""), len(_TRANCHE_ORDER)
+        ),
+    )
 
 
 def load_jsonl(filepath: Path) -> list:
@@ -141,7 +165,7 @@ def print_condensed_results(results: list, naf_dict: dict):
         city_name = siege.get("libelle_commune", "")
         city_code = siege.get("commune", "")
 
-        row = [siren, nom, activite_label, activite_code, city_name.title(), city_code]
+        row = [siren, nom, activite_label, activite_code, city_name, city_code]
         click.echo(",".join(f'"{v}"' for v in row))
 
 
@@ -220,7 +244,11 @@ def print_full_results(results: list, naf_dict: dict):
                 ca = finances[latest_year].get("ca")
                 resultat = finances[latest_year].get("resultat_net")
                 if ca:
-                    click.echo(f"   Finances ({latest_year}): CA={ca:,}€ | Résultat net={resultat:,}€" if resultat else f"   Finances ({latest_year}): CA={ca:,}€")
+                    click.echo(
+                        f"   Finances ({latest_year}): CA={ca:,}€ | Résultat net={resultat:,}€"
+                        if resultat
+                        else f"   Finances ({latest_year}): CA={ca:,}€"
+                    )
 
         click.echo()
 
@@ -284,7 +312,10 @@ def view(file: Optional[str], limit: Optional[int], format: str, size: tuple):
     else:
         filepath = SIRENE_SEARCHES_DIR
         if not filepath.exists():
-            click.echo("No data downloaded yet. Use download_entreprises.py to download data.", err=True)
+            click.echo(
+                "No data downloaded yet. Use download_entreprises.py to download data.",
+                err=True,
+            )
             return
 
     # Load results
