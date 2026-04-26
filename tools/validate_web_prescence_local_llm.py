@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Validate company web presence using a local LLM (Ollama or llama.cpp)."""
-import csv
 import json
 import re
 import time
@@ -9,6 +8,7 @@ from pathlib import Path
 
 import click
 import yaml
+from utils import load_naf_descriptions, get_naf_description
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
@@ -16,7 +16,6 @@ COMPANY_DATA_DIR = DATA_DIR / "company_data"
 DDG_SEARCHES_DIR = COMPANY_DATA_DIR / "ddg_searches"
 VALIDATIONS_DIR = COMPANY_DATA_DIR / "web_presence_validations"
 STATUS_CSV = COMPANY_DATA_DIR / "insights" / "status.csv"
-NAF_CODES_FILE = SCRIPT_DIR / "siren_infos" / "naf_codes.csv"
 
 OLLAMA_MODEL = "qwen3:4b"
 LLAMACPP_MODEL = "qwen2.5-3b-instruct-q4_k_m.gguf"
@@ -41,29 +40,6 @@ CONFIDENCE: <good|strange|wrong>
 REASON: <one sentence>
 """
 
-
-def load_naf_descriptions() -> dict:
-    naf_map = {}
-    try:
-        with open(NAF_CODES_FILE, encoding="utf-8") as f:
-            reader = csv.reader(f)
-            next(reader)
-            for row in reader:
-                if len(row) >= 4:
-                    code = row[1].strip()
-                    description = row[3].strip().replace("\n", " ")
-                    if code and description and not description.startswith("Intitulés"):
-                        naf_map[code] = description
-    except Exception as e:
-        click.echo(f"Warning: could not load NAF codes: {e}", err=True)
-    return naf_map
-
-
-def get_naf_description(naf_code: str, naf_map: dict) -> str:
-    if naf_code in naf_map:
-        return naf_map[naf_code]
-    base = naf_code.rstrip("Z")
-    return naf_map.get(base, f"NAF {naf_code}")
 
 
 def load_ddg_file(path: Path) -> dict:

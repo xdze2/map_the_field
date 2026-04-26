@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from ddgs import DDGS
-from utils import slugify, is_directory
+from utils import slugify, is_directory, load_naf_descriptions, get_naf_description
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
@@ -42,11 +42,8 @@ def find_company_in_local_data(siren: str) -> dict:
     )
 
 
-def build_search_query(company_name: str, postal_code: str) -> str:
-    """Build DuckDuckGo search query."""
-    # Include postal code for geographic context
-    query = f"{company_name} {postal_code} france"
-    return query
+def build_search_query(company_name: str, naf_label: str, city: str) -> str:
+    return f"{company_name} {naf_label} {city}"
 
 
 def search_company_website(query: str, max_results: int = 25, region: str = "fr-fr") -> list:
@@ -163,14 +160,18 @@ def search(siren: str, show_all: bool, max_results: int, region: str):
     company = find_company_in_local_data(siren)
 
     nom = company.get("nom_complet", "")
-    postal_code = company.get("siege", {}).get("code_postal", "")
+    siege = company.get("siege", {})
+    city = siege.get("libelle_commune", siege.get("code_postal", ""))
+    naf_code = company.get("activite_principale", "")
+    naf_map = load_naf_descriptions()
+    naf_label = get_naf_description(naf_code, naf_map)
 
     if not nom:
         raise click.ClickException(f"Company name not found for SIREN {siren}")
 
-    click.echo(f"Found: {nom} ({postal_code})", err=True)
+    click.echo(f"Found: {nom} ({city})", err=True)
 
-    query = build_search_query(nom, postal_code)
+    query = build_search_query(nom, naf_label, city)
     click.echo(f"Searching: {query}", err=True)
 
     raw_results = search_company_website(query, max_results=max_results, region=region)
