@@ -31,6 +31,10 @@ DIRECTORY_BLACKLIST = {
     "legalin.fr",
     "adr-st-o.com",
     "mappy.com",
+    "grokipedia.com",
+    "youtube.com",
+    "pinterest.com",
+    "alibaba.com",
     # Professional networks
     "viadeo.com",
     "viadeo.journaldunet.com",
