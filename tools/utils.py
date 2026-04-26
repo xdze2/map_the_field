@@ -9,6 +9,7 @@ SCRIPT_DIR = Path(__file__).parent
 NAF_CODES_FILE = SCRIPT_DIR / "siren_infos" / "naf_codes.csv"
 
 DIRECTORY_BLACKLIST = {
+    # French company registries & legal directories
     "societe.com",
     "verif.com",
     "sirene.data.gouv.fr",
@@ -16,10 +17,7 @@ DIRECTORY_BLACKLIST = {
     "pagesjaunes.fr",
     "kompass.com",
     "europages.fr",
-    "viadeo.com",
-    "linkedin.com",
     "pappers.fr",
-    "lefigaro.fr",
     "infonet.fr",
     "lagazettefrance.fr",
     "hoodspot.fr",
@@ -30,6 +28,27 @@ DIRECTORY_BLACKLIST = {
     "codes-naf.com",
     "rubypayeur.com",
     "manageo.fr",
+    "legalin.fr",
+    "adr-st-o.com",
+    "mappy.com",
+    # Professional networks
+    "viadeo.com",
+    "viadeo.journaldunet.com",
+    # Startup & company aggregators
+    "crunchbase.com",
+    "airsaas.io",
+    "sortlist.com",
+    "lespepitestech.com",
+    "motherbase.io",
+    # Job boards
+    "welovedevs.com",
+    "indeed.fr",
+    "indeed.com",
+    "jooble.org",
+    "jobteaser.com",
+    "welcometothejungle.com",
+    "apec.fr",
+    "cadremploi.fr",
 }
 
 
