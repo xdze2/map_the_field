@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate company web presence using a local LLM (Ollama or llama.cpp)."""
+import csv
 import json
 import re
 import time

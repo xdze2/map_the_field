@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 from datetime import datetime
 from ddgs import DDGS
-from utils import slugify, is_directory, load_naf_descriptions, get_naf_description
+from utils import (
+    slugify,
+    domain_name_blacklist,
+    load_naf_descriptions,
+    get_naf_description,
+)
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
@@ -43,10 +48,12 @@ def find_company_in_local_data(siren: str) -> dict:
 
 
 def build_search_query(company_name: str, naf_label: str, city: str) -> str:
-    return f"{company_name} {naf_label} {city}"
+    return f'"{company_name}" {city}'
 
 
-def search_company_website(query: str, max_results: int = 25, region: str = "fr-fr") -> list:
+def search_company_website(
+    query: str, max_results: int = 25, region: str = "fr-fr"
+) -> list:
     """Search for company website using DuckDuckGo."""
     try:
         results = DDGS().text(query, max_results=max_results, region=region)
@@ -73,7 +80,7 @@ def filter_results(results: list) -> tuple:
     excluded = []
 
     for result in results:
-        if is_directory(result.get("href", "")):
+        if domain_name_blacklist(result.get("href", "")):
             excluded.append(build_result_dict(result, "blacklisted_directory"))
         else:
             filtered.append(build_result_dict(result))

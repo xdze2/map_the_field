@@ -25,6 +25,11 @@ DIRECTORY_BLACKLIST = {
     "hoodspot.fr",
     "eterritoire.fr",
     "gouv.fr",
+    "annuairefrancais.fr",
+    "datalegal.fr",
+    "codes-naf.com",
+    "rubypayeur.com",
+    "manageo.fr",
 }
 
 
@@ -37,14 +42,17 @@ def slugify(text: str) -> str:
 
 def extract_domain(url: str) -> str:
     """Extract domain from URL."""
-    parsed = urlparse(url if url.startswith(("http://", "https://")) else f"https://{url}")
+    parsed = urlparse(
+        url if url.startswith(("http://", "https://")) else f"https://{url}"
+    )
     return parsed.netloc.lower()
 
 
-def is_directory(url: str) -> bool:
-    """Check if URL belongs to a known directory/annuaire."""
+def domain_name_blacklist(url: str) -> bool:
     domain = extract_domain(url)
-    return domain in DIRECTORY_BLACKLIST or any(domain.endswith(f".{d}") for d in DIRECTORY_BLACKLIST)
+    return domain in DIRECTORY_BLACKLIST or any(
+        domain.endswith(f".{d}") for d in DIRECTORY_BLACKLIST
+    )
 
 
 def load_naf_descriptions() -> dict:
@@ -61,6 +69,7 @@ def load_naf_descriptions() -> dict:
                         naf_map[code] = description
     except Exception as e:
         import click
+
         click.echo(f"Warning: could not load NAF codes: {e}", err=True)
     return naf_map
 
