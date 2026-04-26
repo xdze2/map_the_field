@@ -42,6 +42,18 @@ def decode_naf(code: str, naf_dict: dict) -> str:
     return naf_dict.get(code, code)
 
 
+SIZE_BUCKETS = {
+    "solo":   {"tranches": {"01"},                       "range": "1–2"},
+    "team":   {"tranches": {"02", "03", "11"},           "range": "3–19"},
+    "small":  {"tranches": {"12", "21"},                 "range": "20–99"},
+    "medium": {"tranches": {"22", "31", "32", "41"},     "range": "100–499"},
+    "large":  {"tranches": {"42", "51", "52", "53"},     "range": "500+"},
+}
+
+# Ordered list used for sorting (unknown/empty sorts last)
+_TRANCHE_ORDER = ["01", "02", "03", "11", "12", "21", "22", "31", "32", "41", "42", "51", "52", "53"]
+
+
 def get_size_category(tranche_code: str) -> str:
     """Map official INSEE effectif bracket codes to readable categories."""
     size_map = {
@@ -63,6 +75,29 @@ def get_size_category(tranche_code: str) -> str:
         "53": "10000+",
     }
     return size_map.get(tranche_code, tranche_code)
+
+
+def filter_by_size(results: list, sizes: tuple) -> tuple:
+    """Filter enterprises by coarse size bucket. Returns (filtered_results, excluded_count).
+
+    Sizes: solo (1-2), team (3-19), small (20-99), medium (100-499), large (500+).
+    Entries with unknown/missing headcount are excluded when a filter is active.
+    """
+    allowed_tranches = set()
+    for size in sizes:
+        bucket = SIZE_BUCKETS.get(size)
+        if bucket:
+            allowed_tranches |= bucket["tranches"]
+
+    filtered = [e for e in results if e.get("tranche_effectif_salarie", "") in allowed_tranches]
+    excluded = len(results) - len(filtered)
+    return filtered, excluded
+
+
+def sort_by_size(results: list) -> list:
+    """Sort enterprises from smallest to largest by INSEE tranche code."""
+    order = {code: i for i, code in enumerate(_TRANCHE_ORDER)}
+    return sorted(results, key=lambda e: order.get(e.get("tranche_effectif_salarie", ""), len(_TRANCHE_ORDER)))
 
 
 def load_jsonl(filepath: Path) -> list:
@@ -95,37 +130,19 @@ def filter_active_only(results: list) -> tuple:
 
 
 def print_condensed_results(results: list, naf_dict: dict):
-    """Print condensed view: name, age, activity, size, directors."""
-    for i, enterprise in enumerate(results, 1):
-        nom = enterprise.get("nom_complet", "N/A")
-        siren = enterprise.get("siren", "N/A")
-        date_creation = enterprise.get("date_creation", "N/A")
-        activite_code = enterprise.get("activite_principale", "N/A")
+    """Print condensed CSV view: siren, name, naf_label, naf_code, city_name, city_code."""
+    click.echo("siren,name,naf_label,naf_code,city_name,city_code")
+    for enterprise in results:
+        siren = enterprise.get("siren", "")
+        nom = enterprise.get("nom_complet", "")
+        activite_code = enterprise.get("activite_principale", "")
         activite_label = decode_naf(activite_code, naf_dict)
-        effectif = enterprise.get("tranche_effectif_salarie", "N/A")
-        effectif_label = get_size_category(effectif) if effectif != "N/A" else "N/A"
-        dirigeants = enterprise.get("dirigeants", [])
+        siege = enterprise.get("siege", {})
+        city_name = siege.get("libelle_commune", "")
+        city_code = siege.get("commune", "")
 
-        # Calculate company age
-        age = "N/A"
-        if date_creation and date_creation != "N/A":
-            try:
-                creation_year = int(date_creation.split("-")[0])
-                age = f"{2026 - creation_year}y" if creation_year <= 2026 else "N/A"
-            except (ValueError, IndexError):
-                age = "N/A"
-
-        # Directors names
-        dirigeants_names = []
-        for d in dirigeants[:3]:
-            nom_d = f"{d.get('prenoms', '')} {d.get('nom', '')}".strip()
-            if nom_d:
-                dirigeants_names.append(nom_d)
-        dirigeants_str = ", ".join(dirigeants_names) if dirigeants_names else "N/A"
-
-        click.echo(f"{i}. {nom} ({siren})")
-        click.echo(f"   Age: {age} | Activité: {activite_code} {activite_label} | Size: {effectif_label} | Dirigeants: {dirigeants_str}")
-        click.echo()
+        row = [siren, nom, activite_label, activite_code, city_name.title(), city_code]
+        click.echo(",".join(f'"{v}"' for v in row))
 
 
 def print_full_results(results: list, naf_dict: dict):
@@ -208,6 +225,14 @@ def print_full_results(results: list, naf_dict: dict):
         click.echo()
 
 
+SIZE_CHOICES = click.Choice(list(SIZE_BUCKETS.keys()))
+_SIZE_HELP = (
+    "Filter by company size (repeatable). "
+    "Buckets: solo=1-2, team=3-19, small=20-99, medium=100-499, large=500+. "
+    "Example: --size team --size small"
+)
+
+
 @click.command()
 @click.option(
     "--file",
@@ -228,12 +253,27 @@ def print_full_results(results: list, naf_dict: dict):
     default="condensed",
     help="Output format: condensed (name, age, activity, size, directors) or full (all details)",
 )
-def view(file: Optional[str], limit: Optional[int], format: str):
+@click.option(
+    "--size",
+    "-s",
+    type=SIZE_CHOICES,
+    multiple=True,
+    help=_SIZE_HELP,
+)
+def view(file: Optional[str], limit: Optional[int], format: str, size: tuple):
     """View downloaded SIREN enterprise data from JSONL files.
 
     Pass a file path to view a single file, or a directory to load all JSONL files.
     If neither is specified, defaults to data/company_data/sirene_searches/.
     Filters out closed companies by default.
+
+    \b
+    Size buckets (--size):
+      solo    1-2 employees       (INSEE 01)
+      team    3-19 employees      (INSEE 02, 03, 11)
+      small   20-99 employees     (INSEE 12, 21)
+      medium  100-499 employees   (INSEE 22, 31, 32, 41)
+      large   500+ employees      (INSEE 42, 51, 52, 53)
     """
 
     # Determine which path to use
@@ -272,15 +312,26 @@ def view(file: Optional[str], limit: Optional[int], format: str):
         return
 
     # Filter out closed companies
-    results, excluded = filter_active_only(results)
+    results, excluded_closed = filter_active_only(results)
+
+    # Filter by size bucket
+    excluded_size = 0
+    if size:
+        results, excluded_size = filter_by_size(results, size)
+
+    # Sort condensed output by size (smallest first)
+    if format == "condensed":
+        results = sort_by_size(results)
 
     # Apply limit
     if limit:
         results = results[:limit]
 
     summary = f"Displaying {len(results)}/{total_results} results"
-    if excluded:
-        summary += f" ({excluded} closed excluded)"
+    if excluded_closed:
+        summary += f" ({excluded_closed} closed excluded)"
+    if excluded_size:
+        summary += f" ({excluded_size} filtered by size)"
     click.echo(f"{summary}\n", err=True)
 
     naf_dict = load_naf_codes()
