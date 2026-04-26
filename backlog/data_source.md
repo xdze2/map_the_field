@@ -1,0 +1,14 @@
+https://www.data.gouv.fr/dataservices/api-aides-financieres-de-lademe
+
+
+
+https://www.iot-valley.fr/
+
+
+https://www.toulouse-tech-transfer.com/fr/notre-portefeuille/nos-startups/deeper-pulse
+
+
+https://salon-souverainete-numerique.com/les-intervenants/
+
+
+https://lespepitestech.com/best-of-pepites
