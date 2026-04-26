@@ -4,13 +4,18 @@ Usage: python tools/screening_app.py
 """
 
 import glob
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
 SUMMARIES_DIR = Path(__file__).parent.parent / "data/company_data/company_summaries"
+TRIAGE_DIR    = Path(__file__).parent.parent / "data/company_data/triage"
+ASSETS_DIR    = Path(__file__).parent / "assets"
+TRIAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 
@@ -24,6 +29,19 @@ def load_summaries():
             data["_file"] = os.path.basename(f)
             summaries.append(data)
     return summaries
+
+
+def load_triage(siren):
+    path = TRIAGE_DIR / f"{siren}.jsonl"
+    if not path.exists():
+        return None
+    entries = []
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                entries.append(json.loads(line))
+    return entries[-1] if entries else None
 
 
 SUMMARIES = load_summaries()
@@ -48,29 +66,24 @@ TEMPLATE = """
     flex-shrink: 0;
   }
   #toolbar strong { font-size: 15px; }
-  #counter { color: #a6adc8; font-size: 13px; }
+  #counter { color: #a6adc8; font-size: 13px; margin-right: auto; }
+  #saved-indicator { font-size: 12px; color: #a6e3a1; opacity: 0; transition: opacity 0.4s; }
+  #saved-indicator.show { opacity: 1; }
 
-  #main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+  #main { display: flex; flex: 1; overflow: hidden; }
 
   /* LEFT PANEL */
   #left {
-    width: 380px;
-    min-width: 280px;
+    width: 520px;
+    min-width: 380px;
     display: flex;
     flex-direction: column;
     background: #fff;
     border-right: 1px solid #ddd;
     overflow: hidden;
   }
-  #info {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
-  }
+  #info { flex: 1; overflow-y: auto; padding: 16px; }
+
   .company-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .meta { color: #666; font-size: 12px; margin-bottom: 12px; }
   .badge {
@@ -82,41 +95,84 @@ TEMPLATE = """
     margin-right: 4px;
     margin-bottom: 6px;
   }
-  .badge-good { background: #d1fae5; color: #065f46; }
+  .badge-good  { background: #d1fae5; color: #065f46; }
   .badge-maybe { background: #fef3c7; color: #92400e; }
-  .badge-weak { background: #fee2e2; color: #991b1b; }
-  .badge-type { background: #e0e7ff; color: #3730a3; }
+  .badge-weak  { background: #fee2e2; color: #991b1b; }
+  .badge-type  { background: #e0e7ff; color: #3730a3; }
   .summary-text { line-height: 1.5; color: #333; margin: 10px 0; }
   .keywords { color: #888; font-size: 12px; margin-bottom: 12px; }
 
   .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #999; margin: 12px 0 6px; letter-spacing: 0.05em; }
-  .link-list { list-style: none; }
-  .link-list li { margin-bottom: 5px; }
-  .link-list a {
+
+  .link-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 7px; }
+  .link-row a {
     color: #2563eb;
     text-decoration: none;
     font-size: 12px;
     cursor: pointer;
-    display: block;
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .link-list a:hover { text-decoration: underline; }
-  .link-list .snippet { color: #666; font-size: 11px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .link-row a:hover { text-decoration: underline; }
+  .url-rating { display: flex; gap: 3px; flex-shrink: 0; }
+  .url-rating button {
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 1px 5px;
+    line-height: 1.4;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .url-rating button:hover { opacity: 1; }
+  .url-rating button.active-good  { background: #d1fae5; border-color: #6ee7b7; opacity: 1; }
+  .url-rating button.active-wrong { background: #fee2e2; border-color: #fca5a5; opacity: 1; }
+  .snippet { color: #666; font-size: 11px; margin-top: 2px; margin-left: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .best-url-marker { font-size: 10px; color: #059669; font-weight: 600; margin-left: 4px; }
-  .url-dim { color: #aaa; }
+  .url-dim  { color: #aaa; }
   .url-host { color: #1d4ed8; font-weight: 500; }
 
+  /* BOTTOM TRIAGE PANEL */
   #bottom {
     padding: 12px 16px;
     border-top: 1px solid #eee;
     background: #fafafa;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
-  #comment {
+
+  /* Vibe */
+  .vibe-buttons { display: flex; gap: 6px; }
+  .vibe-btn {
+    flex: 1;
+    padding: 4px;
+    border: 3px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #f1f5f9;
+    transition: all 0.15s;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .vibe-btn img { width: 42px; height: 42px; object-fit: contain; display: block; }
+  .vibe-btn span { font-size: 9px; color: #64748b; line-height: 1.2; text-align: center; }
+  .vibe-btn:hover { transform: scale(1.08); background: #e2e8f0; }
+  .vibe-btn.selected { border-color: #6366f1; background: #eef2ff; transform: scale(1.08); }
+  .vibe-btn.selected span { color: #4338ca; font-weight: 700; }
+
+  textarea#comment {
     width: 100%;
-    height: 64px;
+    height: 56px;
     resize: none;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -124,28 +180,19 @@ TEMPLATE = """
     font-size: 13px;
     font-family: inherit;
   }
-  #comment:focus { outline: none; border-color: #2563eb; }
-  .actions { display: flex; gap: 8px; margin-top: 8px; }
-  .btn {
-    padding: 7px 14px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .btn-skip { background: #e5e7eb; color: #374151; flex: 1; }
+  textarea#comment:focus { outline: none; border-color: #2563eb; }
+
+  .nav-buttons { display: flex; gap: 8px; }
+  .btn { padding: 7px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
   .btn-prev { background: #e5e7eb; color: #374151; }
-  .btn-skip:hover { background: #d1d5db; }
   .btn-prev:hover { background: #d1d5db; }
+  .btn-save { background: #2563eb; color: #fff; flex: 1; }
+  .btn-save:hover { background: #1d4ed8; }
+  .btn-next { background: #e5e7eb; color: #374151; }
+  .btn-next:hover { background: #d1d5db; }
 
   /* RIGHT PANEL */
-  #right {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: #f9f9f9;
-  }
+  #right { flex: 1; display: flex; flex-direction: column; background: #f9f9f9; }
   #iframe-bar {
     padding: 6px 12px;
     background: #f1f5f9;
@@ -157,35 +204,9 @@ TEMPLATE = """
     gap: 8px;
     flex-shrink: 0;
   }
-  #current-url {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #2563eb;
-  }
-  #open-tab {
-    text-decoration: none;
-    color: #2563eb;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-  #preview {
-    flex: 1;
-    border: none;
-    background: #fff;
-  }
-  #iframe-blocked {
-    display: none;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 12px;
-    color: #666;
-    font-size: 14px;
-  }
-  #iframe-blocked a { color: #2563eb; }
+  #current-url { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #2563eb; }
+  #open-tab { text-decoration: none; color: #2563eb; font-size: 12px; white-space: nowrap; }
+  #preview { flex: 1; border: none; background: #fff; }
 </style>
 </head>
 <body>
@@ -193,16 +214,44 @@ TEMPLATE = """
 <div id="toolbar">
   <strong>Company Screening</strong>
   <span id="counter"></span>
+  <span id="saved-indicator">✓ saved</span>
 </div>
 
 <div id="main">
   <div id="left">
     <div id="info"></div>
+
     <div id="bottom">
-      <textarea id="comment" placeholder="Notes, accuracy, interest…"></textarea>
-      <div class="actions">
+      <div>
+        <div class="section-title">Vibe</div>
+        <div class="vibe-buttons">
+          <button class="vibe-btn" data-vibe="1" onclick="setVibe(1)" title="Hell no — run away from this">
+            <img src="/assets/1_nope.png" alt="Hell no"><span>Hell no</span>
+          </button>
+          <button class="vibe-btn" data-vibe="2" onclick="setVibe(2)" title="Not interested, but no offense">
+            <img src="/assets/2_skip_it.png" alt="Skip it"><span>Skip it</span>
+          </button>
+          <button class="vibe-btn" data-vibe="3" onclick="setVibe(3)" title="What? Not enough data to judge">
+            <img src="/assets/3_what.png" alt="What?"><span>What?</span>
+          </button>
+          <button class="vibe-btn" data-vibe="4" onclick="setVibe(4)" title="Boring, but keep it">
+            <img src="/assets/4_keep_it.png" alt="Keep it"><span>Keep it</span>
+          </button>
+          <button class="vibe-btn" data-vibe="5" onclick="setVibe(5)" title="Interested — tell me more">
+            <img src="/assets/5_interested.png" alt="Interested"><span>Interested</span>
+          </button>
+          <button class="vibe-btn" data-vibe="6" onclick="setVibe(6)" title="Excited — let's go now!">
+            <img src="/assets/6_excited.png" alt="Excited"><span>Excited!</span>
+          </button>
+        </div>
+      </div>
+
+      <textarea id="comment" placeholder="Notes, observations, questions…"></textarea>
+
+      <div class="nav-buttons">
         <button class="btn btn-prev" onclick="go(-1)">&#8592; Prev</button>
-        <button class="btn btn-skip" onclick="go(1)">Next &#8594;</button>
+        <button class="btn btn-save" onclick="save()">Save</button>
+        <button class="btn btn-next" onclick="saveAndNext()">Save &amp; Next &#8594;</button>
       </div>
     </div>
   </div>
@@ -213,55 +262,99 @@ TEMPLATE = """
       <a id="open-tab" href="#" target="_blank">open in tab ↗</a>
     </div>
     <iframe id="preview" src="about:blank"></iframe>
-    <div id="iframe-blocked">
-      <span>This site blocks embedding.</span>
-      <a id="blocked-link" href="#" target="_blank">Open in new tab ↗</a>
-    </div>
   </div>
 </div>
 
 <script>
+  const VIBE_LABELS = { 1: 'hell_no', 2: 'skip_it', 3: 'what', 4: 'keep_it', 5: 'interested', 6: 'excited' };
+
   function formatUrl(url) {
     try {
       const u = new URL(url);
-      const dim = s => `<span class="url-dim">${s}</span>`;
+      const dim  = s => `<span class="url-dim">${s}</span>`;
       const bold = s => `<span class="url-host">${s}</span>`;
-      const scheme = dim(u.protocol + '//');
-      // split off subdomain(s) from registrable domain (last two parts)
       const parts = u.hostname.split('.');
-      const main = parts.length > 2 ? parts.slice(-2).join('.') : u.hostname;
-      const sub = parts.length > 2 ? dim(parts.slice(0, -2).join('.') + '.') : '';
-      const rest = dim((u.pathname === '/' ? '' : u.pathname) + u.search + u.hash);
-      return scheme + sub + bold(main) + rest;
-    } catch {
-      return url;
-    }
+      const main  = parts.length > 2 ? parts.slice(-2).join('.') : u.hostname;
+      const sub   = parts.length > 2 ? dim(parts.slice(0, -2).join('.') + '.') : '';
+      const rest  = dim((u.pathname === '/' ? '' : u.pathname) + u.search + u.hash);
+      return dim(u.protocol + '//') + sub + bold(main) + rest;
+    } catch { return url; }
   }
 
   const companies = {{ companies|tojson }};
   let idx = 0;
+  let state = {};        // { vibe, urlRatings }
+  let visitedUrls = [];
 
   function confidence_class(c) {
     return { good: 'badge-good', maybe: 'badge-maybe', weak: 'badge-weak' }[c] || 'badge-maybe';
   }
 
+  function setVibe(v) {
+    state.vibe = (state.vibe === v) ? null : v;
+    document.querySelectorAll('.vibe-btn').forEach(b => {
+      b.classList.toggle('selected', parseInt(b.dataset.vibe) === state.vibe);
+    });
+  }
+
+  function setUrlRating(url, rating) {
+    if (!state.urlRatings) state.urlRatings = {};
+    state.urlRatings[url] = (state.urlRatings[url] === rating) ? null : rating;
+    refreshUrlRatings();
+  }
+
+  function refreshUrlRatings() {
+    document.querySelectorAll('.url-rating button').forEach(b => {
+      const url    = b.closest('[data-url]').dataset.url;
+      const rating = b.dataset.rating;
+      const cur    = state.urlRatings?.[url];
+      b.className  = cur === rating ? `active-${rating}` : '';
+    });
+  }
+
   function render(i) {
-    const c = companies[i];
+    const c  = companies[i];
     const co = c.company;
-    const s = c.summary;
+    const s  = c.summary;
     const best = s.best_url || '';
 
-    document.getElementById('counter').textContent = `${i + 1} / ${companies.length}`;
-    document.getElementById('comment').value = '';
+    // reset state, then load saved triage if any
+    state = { vibe: null, urlRatings: {} };
+    visitedUrls = [];
+    const saved = c._triage;
+    if (saved) {
+      state.vibe       = saved.vibe || null;
+      state.urlRatings = saved.url_ratings || {};
+      document.getElementById('comment').value = saved.note || '';
+    } else {
+      document.getElementById('comment').value = '';
+    }
+
+    // update toolbar
+    const reviewed = companies.filter(x => x._triage).length;
+    document.getElementById('counter').textContent =
+      `${i + 1} / ${companies.length}  ·  ${reviewed} reviewed`;
+
+    // restore vibe buttons
+    document.querySelectorAll('.vibe-btn').forEach(b => {
+      b.classList.toggle('selected', parseInt(b.dataset.vibe) === state.vibe);
+    });
 
     const links = (c.search_results || []).map(r => {
       const isBest = r.url === best;
-      return `<li>
-        <a onclick="loadUrl('${r.url.replace(/'/g, "\\'")}')" title="${r.title || ''}">
-          ${formatUrl(r.url)}${isBest ? '<span class="best-url-marker">★ best</span>' : ''}
-        </a>
-        <div class="snippet">${r.snippet || ''}</div>
-      </li>`;
+      const safeUrl = r.url.replace(/"/g, '&quot;');
+      return `<div class="link-row" data-url="${safeUrl}">
+        <div style="flex:1;min-width:0">
+          <a onclick="loadUrl('${r.url.replace(/'/g, "\\'")}', this)" title="${r.title || ''}">
+            ${formatUrl(r.url)}${isBest ? '<span class="best-url-marker">★</span>' : ''}
+          </a>
+          <div class="snippet">${r.snippet || ''}</div>
+        </div>
+        <div class="url-rating">
+          <button data-rating="good"  onclick="setUrlRating('${safeUrl}','good')"  title="Good URL">👍</button>
+          <button data-rating="wrong" onclick="setUrlRating('${safeUrl}','wrong')" title="Wrong result">👎</button>
+        </div>
+      </div>`;
     }).join('');
 
     document.getElementById('info').innerHTML = `
@@ -272,23 +365,53 @@ TEMPLATE = """
       <div class="summary-text">${s.summary || '<em>No summary</em>'}</div>
       <div class="keywords">🏷 ${(s.keywords || '').toString()}</div>
       <div class="section-title">Search results</div>
-      <ul class="link-list">${links}</ul>
+      ${links}
     `;
 
+    refreshUrlRatings();
     loadUrl(best || '');
   }
 
-  function loadUrl(url) {
+  function loadUrl(url, linkEl) {
     if (!url) {
       document.getElementById('preview').src = 'about:blank';
       document.getElementById('current-url').textContent = '—';
       document.getElementById('open-tab').href = '#';
       return;
     }
+    if (!visitedUrls.includes(url)) visitedUrls.push(url);
     document.getElementById('current-url').textContent = url;
     document.getElementById('open-tab').href = url;
-    document.getElementById('blocked-link').href = url;
     document.getElementById('preview').src = url;
+  }
+
+  async function save() {
+    const c = companies[idx];
+    const payload = {
+      siren:        c.company.siren || c._siren,
+      slug:         c._slug,
+      note:         document.getElementById('comment').value,
+      vibe:         state.vibe,
+      vibe_label:   state.vibe ? VIBE_LABELS[state.vibe] : null,
+      url_ratings:  state.urlRatings || {},
+      visited_urls: visitedUrls,
+    };
+    const resp = await fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (resp.ok) {
+      c._triage = payload;  // update in-memory so counter reflects it
+      const ind = document.getElementById('saved-indicator');
+      ind.classList.add('show');
+      setTimeout(() => ind.classList.remove('show'), 1500);
+    }
+  }
+
+  async function saveAndNext() {
+    await save();
+    go(1);
   }
 
   function go(dir) {
@@ -296,11 +419,11 @@ TEMPLATE = """
     render(idx);
   }
 
-  // keyboard nav
   document.addEventListener('keydown', e => {
-    if (document.activeElement === document.getElementById('comment')) return;
+    if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
     if (e.key === 'ArrowRight' || e.key === 'n') go(1);
     if (e.key === 'ArrowLeft'  || e.key === 'p') go(-1);
+    if (e.key === 's') save();
   });
 
   render(0);
@@ -310,19 +433,50 @@ TEMPLATE = """
 """
 
 
+@app.route("/assets/<path:filename>")
+def assets(filename):
+    return send_from_directory(ASSETS_DIR, filename)
+
+
 @app.route("/")
 def index():
     companies = []
     for s in SUMMARIES:
-        co = s.get("company", {})
-        co.setdefault("postal_code", s.get("meta", {}).get("postal_code", ""))
+        co   = s.get("company", {})
+        meta = s.get("meta", {})
+        co.setdefault("postal_code", meta.get("postal_code", ""))
+        siren = str(meta.get("siren", ""))
+        slug  = meta.get("slug", "")
         companies.append({
-            "company": co,
-            "summary": s.get("summary", {}),
+            "company":        co,
+            "summary":        s.get("summary", {}),
             "search_results": s.get("search_results", []),
-            "_file": s.get("_file", ""),
+            "_file":          s.get("_file", ""),
+            "_siren":         siren,
+            "_slug":          slug,
+            "_triage":        load_triage(siren),
         })
     return render_template_string(TEMPLATE, companies=companies)
+
+
+@app.route("/save", methods=["POST"])
+def save():
+    data  = request.get_json()
+    siren = data.get("siren") or data.get("_siren", "unknown")
+    entry = {
+        "ts":           datetime.now(timezone.utc).isoformat(),
+        "siren":        siren,
+        "slug":         data.get("slug", ""),
+        "note":         data.get("note", ""),
+        "vibe":         data.get("vibe"),
+        "vibe_label":   data.get("vibe_label"),
+        "url_ratings":  data.get("url_ratings", {}),
+        "visited_urls": data.get("visited_urls", []),
+    }
+    path = TRIAGE_DIR / f"{siren}.jsonl"
+    with open(path, "a") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
