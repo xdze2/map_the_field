@@ -1,8 +1,19 @@
 let currentTab = null;
 
-browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-  currentTab = tab;
-  document.getElementById("url").textContent = tab.url;
+function updateCurrentTab() {
+  browser.tabs.query({ active: true }).then(tabs => {
+    const tab = tabs.find(t => t.url && !t.url.startsWith("about:") && !t.url.startsWith("moz-extension:"));
+    if (tab) {
+      currentTab = tab;
+      document.getElementById("url").textContent = tab.url;
+    }
+  });
+}
+
+updateCurrentTab();
+browser.tabs.onActivated.addListener(updateCurrentTab);
+browser.tabs.onUpdated.addListener((_id, change) => {
+  if (change.url) updateCurrentTab();
 });
 
 document.getElementById("ping").addEventListener("click", () => {

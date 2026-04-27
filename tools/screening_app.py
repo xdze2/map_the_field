@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+import trafilatura
 import yaml
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
@@ -49,7 +50,12 @@ def capture():
     dest.mkdir(parents=True, exist_ok=True)
 
     (dest / "page.html").write_text(html, encoding="utf-8")
-    meta = {"url": url, "captured_at": datetime.now(timezone.utc).isoformat()}
+
+    markdown = trafilatura.extract(html, output_format="markdown", include_links=True)
+    if markdown:
+        (dest / "content.md").write_text(markdown, encoding="utf-8")
+
+    meta = {"url": url, "captured_at": datetime.now(timezone.utc).isoformat(), "has_markdown": markdown is not None}
     (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     return jsonify({"path": str(dest.relative_to(Path(__file__).parent.parent))})

@@ -16,7 +16,8 @@
 
   "permissions": [
     "activeTab",
-    "tabs"
+    "tabs",
+    "<all_urls>"
   ],
 
   "content_security_policy": "script-src 'self'; object-src 'none'",
