@@ -188,3 +188,34 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 | Markdown render | marked.js | Lightweight, no build step |
 | LLM (phase 2) | Claude API | Via terminal for now, API later |
 | Data | Files on disk | JSONL + Markdown — no database |
+
+
+# Feed back
+
+Good spec overall — the core model is clean. Here are the gaps I see, roughly ordered by how much pain they'll cause:
+
+Critical (will block implementation)
+
+Capture → node association: When the user is on a company website and clicks "Capture" in the sidebar, how does the extension know which node_id to attach the capture to? The spec doesn't say. Options: the node view must be open in the sidebar; or there's a URL→node lookup; or the user selects from a dropdown. This UX decision shapes the whole capture flow.
+
+Batch import from existing SIREN data: You have 2000+ candidates in sirene_searches/*.jsonl. The spec describes a per-node workflow but doesn't say how those JSONL lines become node folders. There must be a one-time import script (or Flask endpoint) that creates meta.json + index.jsonl entries from the existing SIREN data. Without it, Phase 1 can't start.
+
+Summary canonical location: The spec says "current = latest by filename sort" in summary_history/, but the UI text refers to summary.md. Is there a top-level summary.md that gets overwritten on save, with summary_history/ as the archive? Or is there no top-level file and Flask always reads the latest from the history folder? Pick one — both work, but they imply different Flask read logic.
+
+Will cause friction if left open
+
+slug_{hash} — hash of what? URL? Name? Matters for deduplication: if the same org appears under two URLs across sources, do they become one node or two?
+
+Source status field values: The spec has "good, dubious, discarded ?" with a literal question mark. This needs to be a closed list before you write the UI buttons.
+
+"Add URL" behavior: Does adding a URL auto-fetch the page, or just register the URL for the user to manually capture later? These are very different implementations.
+
+triage.jsonl entry schema: Both rank and notes go here, but the structure of each line isn't specified ({type, value, timestamp} at minimum). The Flask endpoints assume a consistent format.
+
+Fine to defer but worth noting
+
+No text search in list view: With 2000+ nodes, sort/filter by rank/type may not be enough to find a specific company by name. Even a simple client-side filter-as-you-type might be needed quickly.
+
+Session/work queue concept: No mechanism for "show me the 10 most promising unranked nodes for today's session." The active learning in Phase 2 addresses this, but you might want a simpler heuristic (e.g., SIREN recency, or DDG snippet keyword match) as a Phase 1 stopgap.
+
+The most important decision to pin before writing any code is #1 (capture association) — it determines whether the extension sidebar is primarily a "node navigator" (you open a node, then browse) or a "tagger" (you browse, then assign to a node). That affects the whole sidebar UX flow.
