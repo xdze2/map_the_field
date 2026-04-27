@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Map the Field</title>
-  <!-- marked.js for markdown rendering -->
-  <script src="marked.min.js"></script>
+  <link rel="stylesheet" href="easymde.min.css">
+  <script src="easymde.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -40,7 +40,8 @@
       line-height: 1;
     }
     #back-btn:hover { color: #fff; }
-    #topbar-title { font-weight: 700; font-size: 13px; color: #a0b0ff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #topbar-title { font-size: 11px; color: #555; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
+    #topbar-title.list-title { font-weight: 700; font-size: 13px; color: #a0b0ff; font-family: inherit; }
     #flask-status { font-size: 10px; color: transparent; flex-shrink: 0; }
     #flask-status.err { color: #e57373; }
 
@@ -140,8 +141,6 @@
 
     /* ── NODE VIEW ── */
     .node-header { margin-bottom: 12px; }
-    .node-title  { font-size: 15px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-    .node-submeta { font-size: 11px; color: #666; }
 
     /* Rank buttons */
     .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 14px 0 6px; }
@@ -220,12 +219,48 @@
     .rank-btn { display: flex; align-items: center; justify-content: center; }
     .rank-icon { display: block; width: 100%; height: 100%; object-fit: contain; }
 
-    /* Summary edit controls */
-    .summary-toolbar {
+    /* EasyMDE dark overrides */
+    .EasyMDEContainer { font-size: 12px; }
+    .EasyMDEContainer .CodeMirror {
+      background: #0d0f18;
+      color: #ccc;
+      border: 1px solid #2a2d3a;
+      border-radius: 0 0 4px 4px;
+      font-size: 12px;
+      min-height: 180px;
+    }
+    .EasyMDEContainer .editor-toolbar {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+    }
+    .EasyMDEContainer .editor-toolbar button {
+      color: #888 !important;
+    }
+    .EasyMDEContainer .editor-toolbar button:hover,
+    .EasyMDEContainer .editor-toolbar button.active {
+      background: #252840 !important;
+      border-color: #444 !important;
+      color: #ddd !important;
+    }
+    .EasyMDEContainer .editor-toolbar i.separator { border-color: #333; }
+    .EasyMDEContainer .editor-preview {
+      background: #0d0f18;
+      color: #ccc;
+    }
+    .EasyMDEContainer .editor-preview h1 { font-size: 14px; color: #e0e0e0; }
+    .EasyMDEContainer .editor-preview h2 { font-size: 12px; color: #a0b0ff; text-transform: uppercase; letter-spacing: 0.04em; }
+    .EasyMDEContainer .editor-preview a  { color: #66aaff; }
+    .EasyMDEContainer .editor-preview p,
+    .EasyMDEContainer .editor-preview li { font-size: 12px; }
+    .EasyMDEContainer .CodeMirror-scroll { min-height: 180px; }
+    /* save button row */
+    .summary-save-row {
       display: flex;
       justify-content: flex-end;
       gap: 6px;
-      margin-bottom: 4px;
+      margin-top: 4px;
     }
     .summary-btn {
       background: #1e2130;
@@ -239,20 +274,25 @@
     .summary-btn:hover { background: #252840; color: #ddd; }
     .summary-btn.primary { background: #1a3a5a; border-color: #3a6a9a; color: #88bbff; }
     .summary-btn.primary:hover { background: #2a4a6a; }
-    #summary-textarea {
-      width: 100%;
-      min-height: 220px;
-      background: #0d0f18;
-      color: #ccc;
-      border: 1px solid #2a2d3a;
-      border-radius: 4px;
-      padding: 8px;
-      font-size: 12px;
-      font-family: monospace;
-      resize: vertical;
-      line-height: 1.5;
+
+    /* History refresh */
+    .section-label-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 14px 0 6px;
     }
-    #summary-textarea:focus { outline: none; border-color: #4a6aaa; }
+    .section-label-row .section-label { margin: 0; }
+    .refresh-btn {
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .refresh-btn:hover { color: #888; }
 
     /* Toast */
     #toast {
