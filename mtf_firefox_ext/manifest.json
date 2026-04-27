@@ -1,0 +1,26 @@
+{
+  "manifest_version": 2,
+  "name": "Map the Field",
+  "version": "0.1.0",
+  "description": "Triage sidebar for the map_the_field job search",
+
+  "sidebar_action": {
+    "default_title": "Map the Field",
+    "default_panel": "sidebar.html",
+    "default_icon": "icon.svg"
+  },
+
+  "icons": {
+    "48": "icon.svg"
+  },
+
+  "permissions": [
+    "activeTab"
+  ],
+
+  "content_security_policy": "script-src 'self'; object-src 'none'",
+
+  "host_permissions": [
+    "http://localhost:5001/*"
+  ]
+}
