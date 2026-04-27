@@ -41,7 +41,7 @@ data/nodes/{node_id}/
 
 Source status values: `good | dubious | discarded`
 
-`triage.jsonl` entry schema: `{timestamp, rank}` — one line per rank change, no free-text notes (free text lives in the summary markdown).
+`triage.jsonl` entry schema: `{timestamp, rank, note}` — `note` is optional, one line max, captures the decision rationale at the moment of ranking. Full research notes live in the summary markdown.
 
 `node_id` convention:
 - `siren{number}` for French companies (e.g. `siren352187900`)
@@ -149,7 +149,7 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
   - Free text and URLs live here — no separate notes field
 - **Sources:** list of files in `sources/` with status (good / dubious / discarded)
 - **Rank:** 6 buttons (1–6), current rank highlighted; appends to `triage.jsonl`
-- **History:** collapsible list of past triage entries (rank changes, captures)
+- **History:** collapsible timeline merging rank changes (from `triage.jsonl`) and summary saves (from `summary_history/` filenames), in chronological order
 - **"Generate summary" button:** manual trigger only — no auto LLM calls
 
 ---
@@ -169,13 +169,33 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 
 ## Phase 1 scope (now)
 
-- Bootstrap script: import existing `sirene_searches/*.jsonl` into node folders (adapted from `tools/add_company_summary.py --all`)
-- Node folder structure + index.jsonl
-- Flask endpoints above
-- Extension: list view + node view + capture button
-- Manual rank
-- Summary edit with snapshot history
-- Page capture via content script → markdown
+Delivered in order — each step is independently testable:
+
+**Step 1 — Bootstrap script (`add_nodes_from_siren.py`):**
+- Read existing `data/company_data/sirene_searches/*.jsonl`
+- Skip if node folder already exists
+- Create folder structure: `meta.json`, `summary_history/`, `sources/`, `triage.jsonl`
+- Write first summary from SIREN data + DDG snippets if present (data/company_data/ddg_searches) (minimal markdown card), if no DDG search add a URL to make a google search with the company name
+- Update `index.jsonl`
+- Test: run by hand, inspect a few node folders
+
+**Step 2 — Extension list view:**
+- Flask `GET /nodes` endpoint serving `index.jsonl`
+- Sidebar list view: name, type, current rank, last updated
+- Sort by rank / last updated / unranked first
+- Test: load extension, verify list renders correctly
+
+**Step 3 — Node view (navigation + display):**
+- Flask `GET /nodes/{id}` endpoint
+- Sidebar node view: header, summary rendered as markdown, sources list, rank buttons, history timeline
+- Back button → list view
+- Test: click through nodes, verify data displayed correctly
+
+**Step 4 — Node view (edit + capture):**
+- Summary edit mode (toggle render/edit, explicit Save)
+- Rank buttons → `POST /nodes/{id}/rank` → appends to `triage.jsonl`
+- Capture button → content script → `POST /nodes/{id}/capture` → saves to `sources/`
+- Test: rank a node, edit summary, capture a page, verify files on disk
 
 ## Phase 2 (later)
 
