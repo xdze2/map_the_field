@@ -1,110 +1,23 @@
 # Map the Field 2026
 
-> **Project definition and spec:** [map_the_field_project.md](map_the_field_project.md)
+> **Full project definition and spec:** [map_the_field_project.md](map_the_field_project.md)
 
-## Purpose
-Structured exploration of the tech × social impact job market to inform career decisions. The goal is to gather landscape sources, discover organizations and projects, attend events, and use first-principles reasoning to identify the best opportunities.
+## Data model
 
-## Current State (2026-04-23)
-Three raw sources collected:
-- 001: Data.org landscape (11 org categories in data-for-good ecosystem)
-- 002: AI for Good Foundation (ai4good.org) — Deploy/Educate/Govern pillars, Ukraine humanitarian projects
-- 003: Data Science for Social Good (datascienceforsocialgood.org) — fellowship, Aequitas bias toolkit, Solve for Good volunteer platform
+One folder per node (`data/nodes/{node_id}/`): summary with YAML frontmatter, sources, append-only triage log. `data/nodes/index.jsonl` is a derived flat index — recomputable from node folders.
 
-## How Claude Should Help
-When asked to explore, discover, or research:
-- Assume the goal is to enrich the landscape map and feed the job search
-- Format new findings consistently with existing raw_source files
-- Index findings in INDEX.md for easy reference
-- Look for patterns across sources and identify gaps
+Node fields live in the **YAML frontmatter** of the latest summary file. `index.jsonl` is kept in sync by Flask on every summary save. Fields are schemaless — add any key at any time. See [backlog/structured_node_fields.md](backlog/structured_node_fields.md).
 
-## File Structure
+## Python scripts (`tools/`)
 
-**Knowledge base & Quartz site** (root directory):
-- `/raw_source/` — raw collected sources (numbered 001, 002, etc.) — immutable
-- `/wiki/` — knowledge base with entity pages, concept pages, synthesis (LLM-maintained)
-  - `index.md` — catalog of all wiki pages
-  - `organizations/` — organization pages
-  - `concepts/` — topics, themes, trends
-  - `people/` — key people and their roles
-- `/content/` — Quartz static site content
-  - `articles/` — refined, narrative pieces (longer-form synthesis)
-  - `sources/` — index of ingested documents with summaries
-  - `log.md` — project timeline and changelog
+- Use **Click** for all CLI interfaces
+- Design for **idempotence**: running twice produces the same result
+- Each script has a clearly identified input and output
+- Data access goes through an **interface object** (load / save / search) — no direct file I/O scattered across scripts
+- All scripts require `tools/venv/` activated
 
-**SIREN data tools** (standalone Python environment):
-- `/tools/` — Python scripts for SIREN/enterprise data
-  - `tools/venv/` — isolated virtual environment (do NOT commit)
-  - `tools/siren_infos/` — Reference data for SIREN tools
-    - `naf_codes.csv` — Full NAF code reference
-    - `naf_categories.yaml` — NAF activity categories for filtering
-    - `int_courts_naf_rev_2.xls` — Original NAF source data
-    - `openapi.json` — SIREN API OpenAPI schema
-  - `requirements.txt` — Python dependencies
-  - `download_entreprises.py` — Download companies from Recherche d'Entreprises API
-  - `view_entreprises.py` — View/filter downloaded JSONL data (filters out closed companies by default)
-  - `search_duckduckgo.py` — Search for company websites via DuckDuckGo
-- `/data/company_data/` — Company research, triage, and insights
-  - `sirene_searches/` — SIREN API downloads (JSONL format, `.gitignore`d)
-    - `*.jsonl` — one enterprise per line, full API response
-  - `ddg_searches/` — DuckDuckGo search results (JSON format with metadata)
-    - `ddg_search_{SIREN}_{slug}_{date}.json` — full results + metadata
-  - `insights/` — Triage decisions (append-only CSV)
-    - `status.csv` — SIREN, status, reason, notes, date, author
+## Backlog
 
-## Workflow
-
-### Knowledge Base (Wiki + Quartz)
-
-**Ingest a new source:**
-1. Add raw file to `/raw_source/` (e.g., `004_source_name.md`)
-2. Tell Claude to ingest it
-3. Claude reads the source, updates wiki pages, adds entry to `log.md`
-4. Review updates in the wiki
-5. Run `npm run build` to regenerate the Quartz site
-
-**Explore and query:**
-1. Ask Claude questions about the wiki
-2. Good findings can be filed as new wiki pages or articles
-3. Run `npm run build` to update the site
-
-**Maintain:**
-- Periodically lint the wiki for contradictions, orphans, gaps
-- Archive old log entries if they get too long
-
-### SIREN Tools (Python Scripts)
-
-**Setup:**
-```bash
-cd tools
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-**Download SIREN data:**
-```bash
-source tools/venv/bin/activate
-python tools/download_entreprises.py --postal-code 75001 --naf-category core-tech
-```
-Saves raw JSONL results to `/data/company_data/sirene_searches/`.
-
-**View SIREN data:**
-```bash
-source tools/venv/bin/activate
-python tools/view_entreprises.py --file data/company_data/sirene_searches/ --format condensed
-```
-Filters active companies, supports `--format full` for detailed view.
-
-**Search for company websites:**
-```bash
-source tools/venv/bin/activate
-python tools/search_duckduckgo.py SIREN_ID
-```
-
-**Notes:**
-- All scripts require activation of `tools/venv/` first
-- Downloaded data stored in `/data/raw/searches/` (not version controlled)
-- Scripts filter out closed companies by default
-- DDG results auto-saved to `/data/company_data/ddg_searches/` for triage
-- Decision log (`status.csv`) is append-only for audit trail
+Design notes and future work in `backlog/`:
+- [siren_pipeline_improvements.md](backlog/siren_pipeline_improvements.md)
+- [structured_node_fields.md](backlog/structured_node_fields.md)
