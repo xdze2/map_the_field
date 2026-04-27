@@ -7,9 +7,10 @@ See also: `backlog/firefox_extension_poc.md` for architecture decisions and opti
 
 ## Current state
 
-Hello-world working:
 - Sidebar opens, shows current tab URL
 - Ping button hits `localhost:5001` and reports the HTTP status
+- Capture button grabs full page HTML via content script, POSTs to Flask `/capture`
+- Flask saves to `data/web_scraps/{hash}_{slug}/page.html` + `meta.json`
 
 ## Files
 
@@ -22,7 +23,14 @@ Hello-world working:
 
 ## Dev setup
 
-**Load in Firefox:**
+**Launch dedicated Firefox profile** (profile dir must exist first):
+```bash
+mkdir -p ~/.mozilla/firefox/map_the_field
+firefox --profile ~/.mozilla/firefox/map_the_field --no-remote
+```
+`--no-remote` forces a new window even if Firefox is already open. Keep this instance separate from normal browsing — extension is installed here only.
+
+**Load extension:**
 1. `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`
 2. Sidebar: View → Sidebar → Map the Field
 3. To reload after code changes: `about:debugging` → Reload button

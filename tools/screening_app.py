@@ -4,18 +4,23 @@ Usage: python tools/screening_app.py
 """
 
 import glob
+import hashlib
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 
-SUMMARIES_DIR = Path(__file__).parent.parent / "data/company_data/company_summaries"
-TRIAGE_DIR    = Path(__file__).parent.parent / "data/company_data/triage"
-ASSETS_DIR    = Path(__file__).parent / "assets"
+SUMMARIES_DIR  = Path(__file__).parent.parent / "data/company_data/company_summaries"
+TRIAGE_DIR     = Path(__file__).parent.parent / "data/company_data/triage"
+ASSETS_DIR     = Path(__file__).parent / "assets"
+WEB_SCRAPS_DIR = Path(__file__).parent.parent / "data/web_scraps"
 TRIAGE_DIR.mkdir(parents=True, exist_ok=True)
+WEB_SCRAPS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 
@@ -26,6 +31,28 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
+
+
+@app.route("/capture", methods=["POST", "OPTIONS"])
+def capture():
+    if request.method == "OPTIONS":
+        return "", 204
+    data = request.get_json()
+    url = data.get("url", "")
+    html = data.get("html", "")
+
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+    parsed = urlparse(url)
+    slug = re.sub(r"[^a-z0-9]+", "-", (parsed.netloc + parsed.path).lower()).strip("-")[:60]
+    dirname = f"{url_hash}_{slug}"
+    dest = WEB_SCRAPS_DIR / dirname
+    dest.mkdir(parents=True, exist_ok=True)
+
+    (dest / "page.html").write_text(html, encoding="utf-8")
+    meta = {"url": url, "captured_at": datetime.now(timezone.utc).isoformat()}
+    (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    return jsonify({"path": str(dest.relative_to(Path(__file__).parent.parent))})
 
 
 def load_summaries():
