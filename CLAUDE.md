@@ -1,5 +1,7 @@
 # Map the Field 2026
 
+> **Project definition and spec:** [map_the_field_project.md](map_the_field_project.md)
+
 ## Purpose
 Structured exploration of the tech × social impact job market to inform career decisions. The goal is to gather landscape sources, discover organizations and projects, attend events, and use first-principles reasoning to identify the best opportunities.
 

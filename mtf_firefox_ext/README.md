@@ -10,7 +10,7 @@ See also: `backlog/firefox_extension_poc.md` for architecture decisions and opti
 - Sidebar opens, shows current tab URL
 - Ping button hits `localhost:5001` and reports the HTTP status
 - Capture button grabs full page HTML via content script, POSTs to Flask `/capture`
-- Flask saves to `data/web_scraps/{hash}_{slug}/page.html` + `meta.json`
+- Flask saves to `data/web_scraps/{hash}_{slug}/`: `page.html` + `content.md` (trafilatura) + `meta.json`
 
 ## Files
 
@@ -47,11 +47,12 @@ Must be running for the ping button to work. CORS is set to `*` in `after_reques
 - **MV2** (not MV3) — simpler, better supported in Firefox today; persistent background page instead of service worker
 - **CORS**: Flask needs `Access-Control-Allow-Origin: *` — wildcard origin strings like `moz-extension://*` are not valid in that header
 - **host_permissions** in MV2: add `"http://localhost:5001/*"` to the `permissions` array if manifest reload complains about `host_permissions`
-- Content scripts (for page scraping) require `tabs` permission and explicit `executeScript` calls — not yet implemented
+- Content scripts require `tabs` + `<all_urls>` permissions for `executeScript` to work from the sidebar (`activeTab` alone is not enough — it only works from toolbar button clicks)
+- Tab tracking: `currentTab` is updated via `onActivated` + `onUpdated` listeners across all windows; `currentWindow: true` would wrongly resolve to the sidebar's own window
+- trafilatura may return `None` on heavy JS-rendered pages — `meta.json` flags this with `"has_markdown": false`
 
 ## Planned next steps
 
 1. `/current` Flask endpoint → sidebar displays current company (name, URL, description)
-2. Content script POC — `document.body.innerText` → message passing → sidebar
-3. Status buttons (PURSUE / WATCH / PASS / LATER) → POST to Flask → `status.csv`
-4. Notes textarea with autosave to `notes.jsonl`
+2. Status buttons (PURSUE / WATCH / PASS / LATER) → POST to Flask → `status.csv`
+3. Notes textarea with autosave to `notes.jsonl`
