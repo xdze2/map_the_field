@@ -4,33 +4,126 @@
   <meta charset="UTF-8">
   <title>Map the Field</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: sans-serif;
-      padding: 1rem;
-      background: #1a1a2e;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      background: #0f1117;
       color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    h1 { font-size: 1.1rem; margin: 0 0 0.5rem; }
-    #url { font-size: 0.8rem; color: #aaa; word-break: break-all; }
-    button {
-      margin-top: 1rem;
-      padding: 0.4rem 0.8rem;
-      background: #4a90e2;
-      color: white;
-      border: none;
+
+    /* ── TOP BAR ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2a2d3a;
+      flex-shrink: 0;
+    }
+    #topbar-title { font-weight: 700; font-size: 13px; color: #a0b0ff; flex: 1; }
+    #flask-status { font-size: 10px; color: #555; }
+    #flask-status.ok { color: #4caf50; }
+    #flask-status.err { color: #e57373; }
+
+    /* ── TOOLBAR (sort/filter) ── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #13151f;
+      border-bottom: 1px solid #2a2d3a;
+      flex-shrink: 0;
+    }
+    #toolbar select {
+      flex: 1;
+      background: #1e2130;
+      color: #ccc;
+      border: 1px solid #333;
       border-radius: 4px;
-      cursor: pointer;
+      padding: 3px 6px;
+      font-size: 12px;
     }
-    button:hover { background: #357abd; }
-    #status { margin-top: 0.8rem; font-size: 0.85rem; color: #88cc88; }
+    #count { font-size: 11px; color: #555; white-space: nowrap; }
+
+    /* ── NODE LIST ── */
+    #list-view { flex: 1; overflow-y: auto; }
+
+    .node-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-bottom: 1px solid #1e2130;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .node-row:hover { background: #1a1d2e; }
+
+    .rank-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .rank-none  { background: #2a2d3a; color: #555; }
+    .rank-1     { background: #4a1010; color: #ff6b6b; }
+    .rank-2     { background: #3a2a10; color: #ffaa44; }
+    .rank-3     { background: #2a2a2a; color: #888; }
+    .rank-4     { background: #1a2a1a; color: #88cc88; }
+    .rank-5     { background: #1a2a4a; color: #66aaff; }
+    .rank-6     { background: #2a1a4a; color: #cc88ff; }
+
+    .node-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+    }
+    .node-meta { font-size: 10px; color: #555; white-space: nowrap; }
+
+    /* ── EMPTY / ERROR STATES ── */
+    #list-empty {
+      padding: 24px 16px;
+      text-align: center;
+      color: #555;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <h1>Map the Field</h1>
-  <div id="url">—</div>
-  <button id="ping">Ping Flask (localhost:5001)</button>
-  <button id="capture">Capture page</button>
-  <div id="status"></div>
+
+  <div id="topbar">
+    <span id="topbar-title">Map the Field</span>
+    <span id="flask-status">●</span>
+  </div>
+
+  <div id="toolbar">
+    <select id="sort-select">
+      <option value="unranked">Unranked first</option>
+      <option value="rank_desc">Rank ↓ (best first)</option>
+      <option value="rank_asc">Rank ↑ (worst first)</option>
+      <option value="updated">Recently updated</option>
+    </select>
+    <span id="count">—</span>
+  </div>
+
+  <div id="list-view">
+    <div id="list-empty">Loading…</div>
+  </div>
 
   <script src="sidebar.js"></script>
 </body>

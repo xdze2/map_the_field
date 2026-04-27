@@ -20,6 +20,8 @@ SUMMARIES_DIR  = Path(__file__).parent.parent / "data/company_data/company_summa
 TRIAGE_DIR     = Path(__file__).parent.parent / "data/company_data/triage"
 ASSETS_DIR     = Path(__file__).parent / "assets"
 WEB_SCRAPS_DIR = Path(__file__).parent.parent / "data/web_scraps"
+NODES_DIR      = Path(__file__).parent.parent / "data/nodes"
+INDEX_FILE     = NODES_DIR / "index.jsonl"
 TRIAGE_DIR.mkdir(parents=True, exist_ok=True)
 WEB_SCRAPS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -518,6 +520,34 @@ def save():
     with open(path, "a") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return jsonify({"ok": True})
+
+
+@app.route("/nodes")
+def nodes():
+    if not INDEX_FILE.exists():
+        return jsonify([])
+    entries = []
+    with open(INDEX_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                entries.append(json.loads(line))
+
+    sort_by = request.args.get("sort", "unranked")
+    rank_labels = {1: "Hell no", 2: "Not interested", 3: "What?", 4: "Boring", 5: "Interested", 6: "Excited"}
+    for e in entries:
+        e["rank_label"] = rank_labels.get(e.get("current_rank")) if e.get("current_rank") else None
+
+    if sort_by == "rank_asc":
+        entries.sort(key=lambda e: (e["current_rank"] is None, e["current_rank"] or 0))
+    elif sort_by == "rank_desc":
+        entries.sort(key=lambda e: (e["current_rank"] is None, -(e["current_rank"] or 0)))
+    elif sort_by == "updated":
+        entries.sort(key=lambda e: e.get("updated_at", ""), reverse=True)
+    else:  # unranked first
+        entries.sort(key=lambda e: (e["current_rank"] is not None, e.get("updated_at", "")))
+
+    return jsonify(entries)
 
 
 if __name__ == "__main__":
