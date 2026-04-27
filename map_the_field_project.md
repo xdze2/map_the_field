@@ -35,13 +35,17 @@ data/nodes/{node_id}/
     summary_{TIMESTAMP}_{author}.md  ← author: "user" or e.g. "llm_claude_sonnet46"
   sources/              ← raw captured data
     {hash}_{slug}_{timestamp}.md    ← captured page as markdown
-    {hash}_{slug}_{timestamp}.json  ← fetch metadata (url, captured_at, status) status: good, dubious, discarded ?
-  triage.jsonl          ← append-only user input (ranks, notes) — precious
+    {hash}_{slug}_{timestamp}.json  ← fetch metadata (url, captured_at, status)
+  triage.jsonl          ← append-only rank history — precious
 ```
 
+Source status values: `good | dubious | discarded`
+
+`triage.jsonl` entry schema: `{timestamp, rank}` — one line per rank change, no free-text notes (free text lives in the summary markdown).
+
 `node_id` convention:
-- `siren_{number}` for French companies
-- `slug_{hash}` for everything else
+- `siren{number}` for French companies (e.g. `siren352187900`)
+- custom node creation to be defined later (additional app view)
 
 Global index (Flask reads this to serve the list view without scanning all folders):
 
@@ -88,14 +92,14 @@ The tool is designed for work over several weeks. A node record accumulates evid
 - User can already set a rank (often "3 — What?" at this stage)
 
 **Pass 2 — Browse + Capture:**
-- User browses to the company site in the main window
-- Captures page as markdown via the extension
-- Adds/removes URLs in `summary.md`
+- User opens the node view in the sidebar, browses to the company site in the main window
+- Clicks "Capture" at the top of the sidebar → saves the focused tab as markdown to `sources/`
+- Edits the summary markdown to add relevant URLs or notes
 
 **Pass 3 — Summarize:**
-- "Generate summary" button triggers LLM call → rewrites `summary.md`
+- "Generate summary" button triggers LLM call → writes a new file to `summary_history/`
 - User can edit the summary directly (toggle render/edit mode)
-- Every save snapshots to `summary_history/`
+- Every save writes a new timestamped file to `summary_history/`; Flask always reads the latest
 
 **Later passes:**
 - Rank updates as more information arrives
@@ -107,8 +111,9 @@ The tool is designed for work over several weeks. A node record accumulates evid
 
 ```
 Firefox extension (sidebar)
+  ├── Capture button     ← always visible at top; captures focused tab into open node
   ├── List view          ← all nodes, sortable/filterable
-  ├── Node view          ← summary, sources, rank form, notes, history
+  ├── Node view          ← summary, sources, rank form, history
   └── fetch to Flask     ← read/write all state
 
 Flask app (localhost:5001)
@@ -131,16 +136,20 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 - Filter by: rank, type, has-captures, has-summary
 - Click a row → Node view
 
+### Capture button (top of sidebar)
+- Always visible, shows the URL of the currently focused tab
+- Sends page content (via content script → trafilatura) to `POST /nodes/{id}/capture`
+- Disabled when no node is open (list view)
+
 ### Node view
 - **Header:** name, type, identifiers (SIREN, main URL)
-- **Summary panel:** `summary.md` rendered as markdown, toggle to edit mode
+- **Summary panel:** latest file from `summary_history/` rendered as markdown, toggle to edit mode
   - Edit mode: textarea, explicit Save button
-  - Save snapshots to `summary_history/` via Flask
-- **Sources:** list of captured URLs with status (fetched / relevant / removed)
-  - "Add URL" input
-- **Rank:** 6 buttons (1–6), current rank highlighted
-- **Notes:** free-text textarea, saved to `triage.jsonl` on submit
-- **History:** collapsible list of past triage entries (rank changes, notes, captures)
+  - Save writes a new timestamped file to `summary_history/` via Flask
+  - Free text and URLs live here — no separate notes field
+- **Sources:** list of files in `sources/` with status (good / dubious / discarded)
+- **Rank:** 6 buttons (1–6), current rank highlighted; appends to `triage.jsonl`
+- **History:** collapsible list of past triage entries (rank changes, captures)
 - **"Generate summary" button:** manual trigger only — no auto LLM calls
 
 ---
@@ -151,21 +160,20 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 |---|---|---|
 | GET | `/nodes` | List view data (from index.jsonl) |
 | GET | `/nodes/{id}` | Full node data |
-| POST | `/nodes/{id}/rank` | Append rank to triage.jsonl |
-| POST | `/nodes/{id}/notes` | Append note to triage.jsonl |
-| POST | `/nodes/{id}/summary` | Save summary.md + snapshot |
-| POST | `/nodes/{id}/sources` | Add a URL to sources |
-| POST | `/nodes/{id}/capture` | Save captured markdown from extension |
+| POST | `/nodes/{id}/rank` | Append rank entry to triage.jsonl |
+| POST | `/nodes/{id}/summary` | Write new timestamped file to summary_history/ |
+| POST | `/nodes/{id}/capture` | Save captured markdown from extension to sources/ |
 | GET | `/nodes/{id}/history` | Return triage.jsonl entries |
 
 ---
 
 ## Phase 1 scope (now)
 
-- Node folder structure + index
+- Bootstrap script: import existing `sirene_searches/*.jsonl` into node folders (adapted from `tools/add_company_summary.py --all`)
+- Node folder structure + index.jsonl
 - Flask endpoints above
-- Extension: list view + node view
-- Manual rank + notes
+- Extension: list view + node view + capture button
+- Manual rank
 - Summary edit with snapshot history
 - Page capture via content script → markdown
 
@@ -188,34 +196,3 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 | Markdown render | marked.js | Lightweight, no build step |
 | LLM (phase 2) | Claude API | Via terminal for now, API later |
 | Data | Files on disk | JSONL + Markdown — no database |
-
-
-# Feed back
-
-Good spec overall — the core model is clean. Here are the gaps I see, roughly ordered by how much pain they'll cause:
-
-Critical (will block implementation)
-
-Capture → node association: When the user is on a company website and clicks "Capture" in the sidebar, how does the extension know which node_id to attach the capture to? The spec doesn't say. Options: the node view must be open in the sidebar; or there's a URL→node lookup; or the user selects from a dropdown. This UX decision shapes the whole capture flow.
-
-Batch import from existing SIREN data: You have 2000+ candidates in sirene_searches/*.jsonl. The spec describes a per-node workflow but doesn't say how those JSONL lines become node folders. There must be a one-time import script (or Flask endpoint) that creates meta.json + index.jsonl entries from the existing SIREN data. Without it, Phase 1 can't start.
-
-Summary canonical location: The spec says "current = latest by filename sort" in summary_history/, but the UI text refers to summary.md. Is there a top-level summary.md that gets overwritten on save, with summary_history/ as the archive? Or is there no top-level file and Flask always reads the latest from the history folder? Pick one — both work, but they imply different Flask read logic.
-
-Will cause friction if left open
-
-slug_{hash} — hash of what? URL? Name? Matters for deduplication: if the same org appears under two URLs across sources, do they become one node or two?
-
-Source status field values: The spec has "good, dubious, discarded ?" with a literal question mark. This needs to be a closed list before you write the UI buttons.
-
-"Add URL" behavior: Does adding a URL auto-fetch the page, or just register the URL for the user to manually capture later? These are very different implementations.
-
-triage.jsonl entry schema: Both rank and notes go here, but the structure of each line isn't specified ({type, value, timestamp} at minimum). The Flask endpoints assume a consistent format.
-
-Fine to defer but worth noting
-
-No text search in list view: With 2000+ nodes, sort/filter by rank/type may not be enough to find a specific company by name. Even a simple client-side filter-as-you-type might be needed quickly.
-
-Session/work queue concept: No mechanism for "show me the 10 most promising unranked nodes for today's session." The active learning in Phase 2 addresses this, but you might want a simpler heuristic (e.g., SIREN recency, or DDG snippet keyword match) as a Phase 1 stopgap.
-
-The most important decision to pin before writing any code is #1 (capture association) — it determines whether the extension sidebar is primarily a "node navigator" (you open a node, then browse) or a "tagger" (you browse, then assign to a node). That affects the whole sidebar UX flow.
