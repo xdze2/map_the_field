@@ -41,8 +41,7 @@
     }
     #back-btn:hover { color: #fff; }
     #topbar-title { font-weight: 700; font-size: 13px; color: #a0b0ff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #flask-status { font-size: 10px; color: #555; flex-shrink: 0; }
-    #flask-status.ok  { color: #4caf50; }
+    #flask-status { font-size: 10px; color: transparent; flex-shrink: 0; }
     #flask-status.err { color: #e57373; }
 
     /* ── LIST TOOLBAR ── */
@@ -68,7 +67,46 @@
 
     /* ── VIEWS ── */
     #list-view  { flex: 1; overflow-y: auto; }
-    #node-view  { flex: 1; overflow-y: auto; display: none; padding: 12px 10px; }
+    #node-view  { flex: 1; overflow-y: auto; display: none; padding: 12px 10px 0; }
+
+    /* ── BOTTOM BAR (node view only) ── */
+    #node-bottom {
+      display: none;
+      flex-direction: column;
+      flex-shrink: 0;
+      border-top: 1px solid #2a2d3a;
+      background: #13151f;
+    }
+    #rank-bar { display: flex; gap: 4px; padding: 8px 8px 4px; height: 90px; }
+    #nav-bar  { display: flex; }
+    .nav-btn {
+      flex: 1;
+      background: #1a1d27;
+      border: none;
+      border-top: 1px solid #2a2d3a;
+      color: #c0c8e0;
+      font-size: 20px;
+      padding: 10px 0;
+      cursor: pointer;
+      line-height: 1;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, color 0.1s;
+    }
+    .nav-btn:first-child { border-right: 1px solid #2a2d3a; }
+    .nav-btn:hover:not(:disabled) { background: #252840; color: #fff; }
+    .nav-btn:disabled { color: #333; cursor: default; }
+    #nav-counter {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: #444;
+      pointer-events: none;
+      bottom: 6px;
+    }
 
     /* ── NODE ROW ── */
     .node-row {
@@ -108,27 +146,6 @@
     /* Rank buttons */
     .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 14px 0 6px; }
     .rank-buttons { display: flex; gap: 4px; }
-    .rank-btn {
-      flex: 1;
-      padding: 5px 2px;
-      border: 2px solid transparent;
-      border-radius: 6px;
-      background: #1e2130;
-      color: #aaa;
-      cursor: pointer;
-      font-size: 10px;
-      text-align: center;
-      line-height: 1.3;
-      transition: all 0.15s;
-    }
-    .rank-btn:hover { background: #252840; color: #ddd; }
-    .rank-btn.active { color: #fff; font-weight: 700; }
-    .rank-btn[data-rank="1"].active { border-color: #ff6b6b; background: #4a1010; }
-    .rank-btn[data-rank="2"].active { border-color: #ffaa44; background: #3a2a10; }
-    .rank-btn[data-rank="3"].active { border-color: #888;    background: #2a2a2a; }
-    .rank-btn[data-rank="4"].active { border-color: #88cc88; background: #1a2a1a; }
-    .rank-btn[data-rank="5"].active { border-color: #66aaff; background: #1a2a4a; }
-    .rank-btn[data-rank="6"].active { border-color: #cc88ff; background: #2a1a4a; }
 
     /* Summary */
     .summary-box {
@@ -181,6 +198,27 @@
     }
     #capture-btn:hover { background: #3a4a7a; }
     #capture-btn.capturing { color: #888; cursor: default; }
+
+    /* Rank icon buttons */
+    .rank-btn {
+      flex: 1;
+      padding: 4px 2px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      background: #1e2130;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .rank-btn:hover { border-color: #444; background: #252840; }
+    .rank-btn[data-rank="1"].active { border-color: #ff6b6b; background: #4a1010; }
+    .rank-btn[data-rank="2"].active { border-color: #ffaa44; background: #3a2a10; }
+    .rank-btn[data-rank="3"].active { border-color: #888;    background: #2a2a2a; }
+    .rank-btn[data-rank="4"].active { border-color: #88cc88; background: #1a2a1a; }
+    .rank-btn[data-rank="5"].active { border-color: #66aaff; background: #1a2a4a; }
+    .rank-btn[data-rank="6"].active { border-color: #cc88ff; background: #2a1a4a; }
+    .rank-btn { display: flex; align-items: center; justify-content: center; }
+    .rank-icon { display: block; width: 100%; height: 100%; object-fit: contain; }
 
     /* Summary edit controls */
     .summary-toolbar {
@@ -243,8 +281,8 @@
   <div id="topbar">
     <button id="back-btn" title="Back to list">←</button>
     <span id="topbar-title">Map the Field</span>
+    <span id="flask-status" title="Flask not reachable">●</span>
     <button id="capture-btn" title="Capture current tab into this node">⬇ Capture</button>
-    <span id="flask-status">●</span>
   </div>
   <div id="toast"></div>
 
@@ -264,6 +302,15 @@
   </div>
 
   <div id="node-view"></div>
+
+  <div id="node-bottom">
+    <div id="rank-bar"></div>
+    <div id="nav-bar" style="position:relative;">
+      <button id="prev-btn" class="nav-btn" title="Previous node">&lt; prev</button>
+      <span id="nav-counter"></span>
+      <button id="next-btn" class="nav-btn" title="Next node">next &gt;</button>
+    </div>
+  </div>
 
   <script src="sidebar.js"></script>
 </body>

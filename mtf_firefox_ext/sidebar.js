@@ -9,9 +9,20 @@ const RANK_LABELS = {
   6: "Excited",
 };
 
+const RANK_ICONS = {
+  1: "1_nope.png",
+  2: "2_skip_it.png",
+  3: "3_what.png",
+  4: "4_keep_it.png",
+  5: "5_interested.png",
+  6: "6_excited.png",
+};
+
 let currentNodeId = null;
 let currentTab = null;
 let summaryEditMode = false;
+let nodeList = [];       // ordered list from last loadNodes call
+let currentIndex = -1;  // index of open node in nodeList
 
 // ── Tab tracking ─────────────────────────────────────────────────────────────
 
@@ -31,8 +42,7 @@ browser.tabs.onUpdated.addListener((_id, change) => { if (change.url) updateCurr
 function setFlaskStatus(ok) {
   const el = document.getElementById("flask-status");
   el.textContent = "●";
-  el.className = ok ? "ok" : "err";
-  el.title = ok ? "Flask reachable" : "Flask not reachable";
+  el.className = ok ? "" : "err";
 }
 
 async function checkFlask() {
@@ -63,6 +73,7 @@ function toast(msg, isError = false) {
 function showListView() {
   document.getElementById("list-view").style.display = "block";
   document.getElementById("node-view").style.display = "none";
+  document.getElementById("node-bottom").style.display = "none";
   document.getElementById("list-toolbar").style.display = "flex";
   document.getElementById("back-btn").style.display = "none";
   document.getElementById("capture-btn").style.display = "none";
@@ -73,9 +84,21 @@ function showListView() {
 function showNodeView() {
   document.getElementById("list-view").style.display = "none";
   document.getElementById("node-view").style.display = "block";
+  document.getElementById("node-bottom").style.display = "flex";
   document.getElementById("list-toolbar").style.display = "none";
   document.getElementById("back-btn").style.display = "block";
   document.getElementById("capture-btn").style.display = "block";
+  updateNavButtons();
+}
+
+function updateNavButtons() {
+  const prev = document.getElementById("prev-btn");
+  const next = document.getElementById("next-btn");
+  const counter = document.getElementById("nav-counter");
+  if (!prev || !next) return;
+  prev.disabled = currentIndex <= 0;
+  next.disabled = currentIndex < 0 || currentIndex >= nodeList.length - 1;
+  counter.textContent = nodeList.length > 0 ? `${currentIndex + 1}/${nodeList.length}` : "";
 }
 
 // ── List view ────────────────────────────────────────────────────────────────
@@ -93,6 +116,7 @@ async function loadNodes(sort = "unranked") {
 }
 
 function renderList(nodes) {
+  nodeList = nodes;  // store for prev/next navigation
   const container = document.getElementById("list-view");
   container.innerHTML = "";
 
@@ -132,15 +156,17 @@ function makeRow(node) {
   row.appendChild(name);
   row.appendChild(meta);
 
-  row.addEventListener("click", () => openNode(node.node_id, node.name));
+  const idx = nodeList.indexOf(node);
+  row.addEventListener("click", () => openNode(node.node_id, node.name, idx));
   return row;
 }
 
 // ── Node view ────────────────────────────────────────────────────────────────
 
-async function openNode(nodeId, nodeName) {
-  showNodeView();
+async function openNode(nodeId, nodeName, idx) {
   currentNodeId = nodeId;
+  currentIndex = idx !== undefined ? idx : nodeList.findIndex(n => n.node_id === nodeId);
+  showNodeView();
   summaryEditMode = false;
   document.getElementById("topbar-title").textContent = nodeName || nodeId;
   document.getElementById("node-view").innerHTML = `<div class="empty-msg">Loading…</div>`;
@@ -177,17 +203,22 @@ function renderNode(data) {
   header.appendChild(el("div", "node-submeta", submeta.join(" · ")));
   container.appendChild(header);
 
-  // ── Rank buttons ──
-  container.appendChild(el("div", "section-label", "Rank"));
-  const rankRow = el("div", "rank-buttons");
+  // ── Rank buttons (in bottom bar) ──
+  const rankBar = document.getElementById("rank-bar");
+  rankBar.innerHTML = "";
   for (let i = 1; i <= 6; i++) {
-    const btn = el("button", "rank-btn" + (current_rank === i ? " active" : ""), `${i}\n${RANK_LABELS[i]}`);
+    const btn = document.createElement("button");
+    btn.className = "rank-btn" + (current_rank === i ? " active" : "");
     btn.dataset.rank = i;
-    btn.style.whiteSpace = "pre-line";
-    btn.addEventListener("click", () => postRank(i, btn, rankRow));
-    rankRow.appendChild(btn);
+    btn.title = `${i} — ${RANK_LABELS[i]}`;
+    const img = document.createElement("img");
+    img.src = RANK_ICONS[i];
+    img.alt = RANK_LABELS[i];
+    img.className = "rank-icon";
+    btn.appendChild(img);
+    btn.addEventListener("click", () => postRank(i, btn, rankBar));
+    rankBar.appendChild(btn);
   }
-  container.appendChild(rankRow);
 
   // ── Summary ──
   container.appendChild(el("div", "section-label", "Summary"));
@@ -362,6 +393,20 @@ function el(tag, className, text) {
 document.getElementById("back-btn").addEventListener("click", () => {
   showListView();
   loadNodes(document.getElementById("sort-select").value);
+});
+
+document.getElementById("prev-btn").addEventListener("click", () => {
+  if (currentIndex > 0) {
+    const node = nodeList[currentIndex - 1];
+    openNode(node.node_id, node.name, currentIndex - 1);
+  }
+});
+
+document.getElementById("next-btn").addEventListener("click", () => {
+  if (currentIndex >= 0 && currentIndex < nodeList.length - 1) {
+    const node = nodeList[currentIndex + 1];
+    openNode(node.node_id, node.name, currentIndex + 1);
+  }
 });
 
 document.getElementById("sort-select").addEventListener("change", e => {
