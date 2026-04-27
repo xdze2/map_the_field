@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Map the Field</title>
+  <!-- marked.js for markdown rendering -->
+  <script src="marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -27,13 +29,24 @@
       border-bottom: 1px solid #2a2d3a;
       flex-shrink: 0;
     }
-    #topbar-title { font-weight: 700; font-size: 13px; color: #a0b0ff; flex: 1; }
-    #flask-status { font-size: 10px; color: #555; }
-    #flask-status.ok { color: #4caf50; }
+    #back-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: #a0b0ff;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    #back-btn:hover { color: #fff; }
+    #topbar-title { font-weight: 700; font-size: 13px; color: #a0b0ff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #flask-status { font-size: 10px; color: #555; flex-shrink: 0; }
+    #flask-status.ok  { color: #4caf50; }
     #flask-status.err { color: #e57373; }
 
-    /* ── TOOLBAR (sort/filter) ── */
-    #toolbar {
+    /* ── LIST TOOLBAR ── */
+    #list-toolbar {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -42,7 +55,7 @@
       border-bottom: 1px solid #2a2d3a;
       flex-shrink: 0;
     }
-    #toolbar select {
+    #list-toolbar select {
       flex: 1;
       background: #1e2130;
       color: #ccc;
@@ -53,9 +66,11 @@
     }
     #count { font-size: 11px; color: #555; white-space: nowrap; }
 
-    /* ── NODE LIST ── */
-    #list-view { flex: 1; overflow-y: auto; }
+    /* ── VIEWS ── */
+    #list-view  { flex: 1; overflow-y: auto; }
+    #node-view  { flex: 1; overflow-y: auto; display: none; padding: 12px 10px; }
 
+    /* ── NODE ROW ── */
     .node-row {
       display: flex;
       align-items: center;
@@ -68,50 +83,103 @@
     .node-row:hover { background: #1a1d2e; }
 
     .rank-badge {
-      width: 22px;
-      height: 22px;
+      width: 22px; height: 22px;
       border-radius: 50%;
-      font-size: 11px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .rank-none  { background: #2a2d3a; color: #555; }
-    .rank-1     { background: #4a1010; color: #ff6b6b; }
-    .rank-2     { background: #3a2a10; color: #ffaa44; }
-    .rank-3     { background: #2a2a2a; color: #888; }
-    .rank-4     { background: #1a2a1a; color: #88cc88; }
-    .rank-5     { background: #1a2a4a; color: #66aaff; }
-    .rank-6     { background: #2a1a4a; color: #cc88ff; }
+    .rank-none { background: #2a2d3a; color: #555; }
+    .rank-1    { background: #4a1010; color: #ff6b6b; }
+    .rank-2    { background: #3a2a10; color: #ffaa44; }
+    .rank-3    { background: #2a2a2a; color: #888; }
+    .rank-4    { background: #1a2a1a; color: #88cc88; }
+    .rank-5    { background: #1a2a4a; color: #66aaff; }
+    .rank-6    { background: #2a1a4a; color: #cc88ff; }
 
-    .node-name {
+    .node-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    .node-meta-col { font-size: 10px; color: #555; white-space: nowrap; }
+
+    /* ── NODE VIEW ── */
+    .node-header { margin-bottom: 12px; }
+    .node-title  { font-size: 15px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+    .node-submeta { font-size: 11px; color: #666; }
+
+    /* Rank buttons */
+    .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 14px 0 6px; }
+    .rank-buttons { display: flex; gap: 4px; }
+    .rank-btn {
       flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-size: 12px;
-    }
-    .node-meta { font-size: 10px; color: #555; white-space: nowrap; }
-
-    /* ── EMPTY / ERROR STATES ── */
-    #list-empty {
-      padding: 24px 16px;
+      padding: 5px 2px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      background: #1e2130;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 10px;
       text-align: center;
-      color: #555;
-      font-size: 12px;
+      line-height: 1.3;
+      transition: all 0.15s;
     }
+    .rank-btn:hover { background: #252840; color: #ddd; }
+    .rank-btn.active { color: #fff; font-weight: 700; }
+    .rank-btn[data-rank="1"].active { border-color: #ff6b6b; background: #4a1010; }
+    .rank-btn[data-rank="2"].active { border-color: #ffaa44; background: #3a2a10; }
+    .rank-btn[data-rank="3"].active { border-color: #888;    background: #2a2a2a; }
+    .rank-btn[data-rank="4"].active { border-color: #88cc88; background: #1a2a1a; }
+    .rank-btn[data-rank="5"].active { border-color: #66aaff; background: #1a2a4a; }
+    .rank-btn[data-rank="6"].active { border-color: #cc88ff; background: #2a1a4a; }
+
+    /* Summary */
+    .summary-box {
+      background: #13151f;
+      border: 1px solid #2a2d3a;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 4px;
+    }
+    .summary-box.rendered { cursor: default; }
+    .summary-rendered { line-height: 1.55; color: #ccc; }
+    .summary-rendered h1 { font-size: 14px; color: #e0e0e0; margin: 0 0 8px; }
+    .summary-rendered h2 { font-size: 12px; color: #a0b0ff; text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 4px; }
+    .summary-rendered p  { margin-bottom: 6px; font-size: 12px; }
+    .summary-rendered ul { padding-left: 16px; margin-bottom: 6px; }
+    .summary-rendered li { font-size: 12px; margin-bottom: 3px; }
+    .summary-rendered a  { color: #66aaff; text-decoration: none; }
+    .summary-rendered a:hover { text-decoration: underline; }
+    .summary-rendered code { background: #1e2130; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+
+    /* Sources */
+    .source-item { padding: 6px 0; border-bottom: 1px solid #1e2130; font-size: 11px; color: #888; }
+    .source-item:last-child { border-bottom: none; }
+    .source-url { color: #66aaff; word-break: break-all; }
+
+    /* History */
+    .history-item {
+      padding: 5px 0;
+      border-bottom: 1px solid #1e2130;
+      font-size: 11px;
+      color: #666;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-rank { font-weight: 700; color: #aaa; }
+    .history-ts   { color: #444; font-size: 10px; }
+    .history-note { color: #999; margin-top: 2px; }
+
+    /* Empty / loading */
+    .empty-msg { padding: 24px 16px; text-align: center; color: #555; font-size: 12px; }
   </style>
 </head>
 <body>
 
   <div id="topbar">
+    <button id="back-btn" title="Back to list">←</button>
     <span id="topbar-title">Map the Field</span>
     <span id="flask-status">●</span>
   </div>
 
-  <div id="toolbar">
+  <!-- list toolbar — hidden when in node view -->
+  <div id="list-toolbar">
     <select id="sort-select">
       <option value="unranked">Unranked first</option>
       <option value="rank_desc">Rank ↓ (best first)</option>
@@ -122,8 +190,10 @@
   </div>
 
   <div id="list-view">
-    <div id="list-empty">Loading…</div>
+    <div class="empty-msg">Loading…</div>
   </div>
+
+  <div id="node-view"></div>
 
   <script src="sidebar.js"></script>
 </body>

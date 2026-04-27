@@ -522,6 +522,50 @@ def save():
     return jsonify({"ok": True})
 
 
+@app.route("/nodes/<node_id>")
+def node_detail(node_id):
+    node_dir = NODES_DIR / node_id
+    if not node_dir.exists():
+        return jsonify({"error": "not found"}), 404
+
+    meta = json.loads((node_dir / "meta.json").read_text())
+
+    # current summary = latest file in summary_history/ by name sort
+    summaries = sorted((node_dir / "summary_history").glob("summary_*.md"))
+    summary_md = summaries[-1].read_text() if summaries else ""
+    summary_file = summaries[-1].name if summaries else None
+
+    # triage history
+    triage_entries = []
+    triage_file = node_dir / "triage.jsonl"
+    if triage_file.exists():
+        for line in triage_file.read_text().splitlines():
+            line = line.strip()
+            if line:
+                triage_entries.append(json.loads(line))
+    current_rank = triage_entries[-1].get("rank") if triage_entries else None
+
+    # sources
+    sources = []
+    for f in sorted((node_dir / "sources").glob("*.json")):
+        try:
+            s = json.loads(f.read_text())
+            s["_file"] = f.name
+            sources.append(s)
+        except Exception:
+            pass
+
+    return jsonify({
+        "node_id": node_id,
+        "meta": meta,
+        "summary_md": summary_md,
+        "summary_file": summary_file,
+        "current_rank": current_rank,
+        "triage": triage_entries,
+        "sources": sources,
+    })
+
+
 @app.route("/nodes")
 def nodes():
     if not INDEX_FILE.exists():
