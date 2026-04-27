@@ -566,6 +566,85 @@ def node_detail(node_id):
     })
 
 
+@app.route("/nodes/<node_id>/rank", methods=["POST", "OPTIONS"])
+def node_rank(node_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    node_dir = NODES_DIR / node_id
+    if not node_dir.exists():
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json()
+    rank = data.get("rank")
+    note = data.get("note", "")
+    entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "rank": rank, "note": note}
+    with open(node_dir / "triage.jsonl", "a") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    # update index
+    _update_index_entry(node_id, current_rank=rank)
+    return jsonify({"ok": True, "rank": rank})
+
+
+@app.route("/nodes/<node_id>/summary", methods=["POST", "OPTIONS"])
+def node_summary(node_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    node_dir = NODES_DIR / node_id
+    if not node_dir.exists():
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json()
+    content = data.get("content", "")
+    author = data.get("author", "user")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filename = f"summary_{ts}_{author}.md"
+    (node_dir / "summary_history" / filename).write_text(content, encoding="utf-8")
+    _update_index_entry(node_id, updated_at=ts)
+    return jsonify({"ok": True, "file": filename})
+
+
+@app.route("/nodes/<node_id>/capture", methods=["POST", "OPTIONS"])
+def node_capture(node_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    node_dir = NODES_DIR / node_id
+    if not node_dir.exists():
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json()
+    url = data.get("url", "")
+    html = data.get("html", "")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+    parsed = urlparse(url)
+    slug = re.sub(r"[^a-z0-9]+", "-", (parsed.netloc + parsed.path).lower()).strip("-")[:40]
+    base = f"{url_hash}_{slug}_{ts}"
+    sources_dir = node_dir / "sources"
+    markdown = trafilatura.extract(html, output_format="markdown", include_links=True)
+    if markdown:
+        (sources_dir / f"{base}.md").write_text(markdown, encoding="utf-8")
+    meta = {"url": url, "captured_at": datetime.now(timezone.utc).isoformat(),
+            "has_markdown": markdown is not None, "status": "good"}
+    (sources_dir / f"{base}.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return jsonify({"ok": True, "file": base, "has_markdown": markdown is not None})
+
+
+def _update_index_entry(node_id, current_rank=None, updated_at=None):
+    if not INDEX_FILE.exists():
+        return
+    lines = INDEX_FILE.read_text().splitlines()
+    new_lines = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        entry = json.loads(line)
+        if entry["node_id"] == node_id:
+            if current_rank is not None:
+                entry["current_rank"] = current_rank
+            if updated_at is not None:
+                entry["updated_at"] = updated_at
+        new_lines.append(json.dumps(entry, ensure_ascii=False))
+    INDEX_FILE.write_text("\n".join(new_lines) + "\n")
+
+
 @app.route("/nodes")
 def nodes():
     if not INDEX_FILE.exists():
