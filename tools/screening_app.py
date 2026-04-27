@@ -51,14 +51,19 @@ def web_ui_marked():
     return send_from_directory(EXT_DIR, "marked.min.js")
 
 
-@app.route("/easymde.min.js")
-def web_ui_easymde_js():
-    return send_from_directory(EXT_DIR, "easymde.min.js")
+@app.route("/codemirror.min.js")
+def web_ui_cm_js():
+    return send_from_directory(EXT_DIR, "codemirror.min.js")
 
 
-@app.route("/easymde.min.css")
-def web_ui_easymde_css():
-    return send_from_directory(EXT_DIR, "easymde.min.css")
+@app.route("/codemirror.min.css")
+def web_ui_cm_css():
+    return send_from_directory(EXT_DIR, "codemirror.min.css")
+
+
+@app.route("/codemirror-markdown.min.js")
+def web_ui_cm_md():
+    return send_from_directory(EXT_DIR, "codemirror-markdown.min.js")
 
 
 @app.route("/<filename>.png")

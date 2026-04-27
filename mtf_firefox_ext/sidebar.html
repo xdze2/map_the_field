@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Map the Field</title>
-  <link rel="stylesheet" href="easymde.min.css">
-  <script src="easymde.min.js"></script>
+  <link rel="stylesheet" href="codemirror.min.css">
+  <script src="codemirror.min.js"></script>
+  <script src="codemirror-markdown.min.js"></script>
+  <script src="marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,11 +25,12 @@
     #topbar {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
+      gap: 6px;
+      padding: 6px 10px;
       background: #1a1d27;
       border-bottom: 1px solid #2a2d3a;
       flex-shrink: 0;
+      min-height: 36px;
     }
     #back-btn {
       display: none;
@@ -38,12 +41,58 @@
       font-size: 16px;
       padding: 0 4px;
       line-height: 1;
+      flex-shrink: 0;
     }
     #back-btn:hover { color: #fff; }
-    #topbar-title { font-size: 11px; color: #555; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
-    #topbar-title.list-title { font-weight: 700; font-size: 13px; color: #a0b0ff; font-family: inherit; }
+
+    /* list view: big title */
+    #topbar-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #a0b0ff;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* node view: small dim node_id */
+    #topbar-title.node-id {
+      font-weight: 400;
+      font-size: 10px;
+      color: #444;
+      font-family: monospace;
+    }
+
     #flask-status { font-size: 10px; color: transparent; flex-shrink: 0; }
     #flask-status.err { color: #e57373; }
+
+    /* URL preview next to capture button */
+    #capture-url {
+      display: none;
+      font-size: 10px;
+      color: #556;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+      flex-shrink: 1;
+    }
+    #capture-btn {
+      display: none;
+      background: #2a3a5a;
+      border: 1px solid #3a5a8a;
+      color: #88bbff;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #capture-btn:hover { background: #3a4a7a; }
+    #capture-btn.capturing { color: #888; cursor: default; }
 
     /* ── LIST TOOLBAR ── */
     #list-toolbar {
@@ -68,9 +117,9 @@
 
     /* ── VIEWS ── */
     #list-view  { flex: 1; overflow-y: auto; }
-    #node-view  { flex: 1; overflow-y: auto; display: none; padding: 12px 10px 0; }
+    #node-view  { flex: 1; overflow-y: auto; display: none; padding: 10px 10px 0; }
 
-    /* ── BOTTOM BAR (node view only) ── */
+    /* ── BOTTOM BAR ── */
     #node-bottom {
       display: none;
       flex-direction: column;
@@ -78,8 +127,9 @@
       border-top: 1px solid #2a2d3a;
       background: #13151f;
     }
-    #rank-bar { display: flex; gap: 4px; padding: 8px 8px 4px; height: 90px; }
+    #rank-bar { display: flex; gap: 4px; padding: 6px 6px 2px; }
     #nav-bar  { display: flex; }
+
     .nav-btn {
       flex: 1;
       background: #1a1d27;
@@ -87,7 +137,7 @@
       border-top: 1px solid #2a2d3a;
       color: #c0c8e0;
       font-size: 20px;
-      padding: 10px 0;
+      padding: 8px 0;
       cursor: pointer;
       line-height: 1;
       text-align: center;
@@ -106,10 +156,50 @@
       font-size: 10px;
       color: #444;
       pointer-events: none;
-      bottom: 6px;
+      bottom: 5px;
     }
 
-    /* ── NODE ROW ── */
+    /* ── RANK BUTTONS ── */
+    .rank-btn {
+      flex: 1;
+      padding: 3px 2px 2px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      background: #1e2130;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .rank-btn:hover { border-color: #444; background: #252840; }
+    .rank-icon { display: block; width: 36px; height: 36px; object-fit: contain; }
+    .rank-label {
+      font-size: 8px;
+      color: #556;
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .rank-btn:hover .rank-label { color: #99a; }
+    .rank-btn[data-rank="1"].active { border-color: #ff6b6b; background: #4a1010; }
+    .rank-btn[data-rank="2"].active { border-color: #ffaa44; background: #3a2a10; }
+    .rank-btn[data-rank="3"].active { border-color: #888;    background: #2a2a2a; }
+    .rank-btn[data-rank="4"].active { border-color: #88cc88; background: #1a2a1a; }
+    .rank-btn[data-rank="5"].active { border-color: #66aaff; background: #1a2a4a; }
+    .rank-btn[data-rank="6"].active { border-color: #cc88ff; background: #2a1a4a; }
+    .rank-btn[data-rank="1"].active .rank-label { color: #ff6b6b; }
+    .rank-btn[data-rank="2"].active .rank-label { color: #ffaa44; }
+    .rank-btn[data-rank="3"].active .rank-label { color: #aaa; }
+    .rank-btn[data-rank="4"].active .rank-label { color: #88cc88; }
+    .rank-btn[data-rank="5"].active .rank-label { color: #66aaff; }
+    .rank-btn[data-rank="6"].active .rank-label { color: #cc88ff; }
+
+    /* ── NODE ROW (list) ── */
     .node-row {
       display: flex;
       align-items: center;
@@ -139,143 +229,15 @@
     .node-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
     .node-meta-col { font-size: 10px; color: #555; white-space: nowrap; }
 
-    /* ── NODE VIEW ── */
-    .node-header { margin-bottom: 12px; }
-
-    /* Rank buttons */
-    .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 14px 0 6px; }
-    .rank-buttons { display: flex; gap: 4px; }
-
-    /* Summary */
-    .summary-box {
-      background: #13151f;
-      border: 1px solid #2a2d3a;
-      border-radius: 6px;
-      padding: 10px;
-      margin-top: 4px;
+    /* ── SECTION LABELS ── */
+    .section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8090b0;
+      margin: 14px 0 6px;
+      font-weight: 600;
     }
-    .summary-box.rendered { cursor: default; }
-    .summary-rendered { line-height: 1.55; color: #ccc; }
-    .summary-rendered h1 { font-size: 14px; color: #e0e0e0; margin: 0 0 8px; }
-    .summary-rendered h2 { font-size: 12px; color: #a0b0ff; text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 4px; }
-    .summary-rendered p  { margin-bottom: 6px; font-size: 12px; }
-    .summary-rendered ul { padding-left: 16px; margin-bottom: 6px; }
-    .summary-rendered li { font-size: 12px; margin-bottom: 3px; }
-    .summary-rendered a  { color: #66aaff; text-decoration: none; }
-    .summary-rendered a:hover { text-decoration: underline; }
-    .summary-rendered code { background: #1e2130; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
-
-    /* Sources */
-    .source-item { padding: 6px 0; border-bottom: 1px solid #1e2130; font-size: 11px; color: #888; }
-    .source-item:last-child { border-bottom: none; }
-    .source-url { color: #66aaff; word-break: break-all; }
-
-    /* History */
-    .history-item {
-      padding: 5px 0;
-      border-bottom: 1px solid #1e2130;
-      font-size: 11px;
-      color: #666;
-    }
-    .history-item:last-child { border-bottom: none; }
-    .history-rank { font-weight: 700; color: #aaa; }
-    .history-ts   { color: #444; font-size: 10px; }
-    .history-note { color: #999; margin-top: 2px; }
-
-    /* Capture button */
-    #capture-btn {
-      display: none;
-      background: #2a3a5a;
-      border: 1px solid #3a5a8a;
-      color: #88bbff;
-      border-radius: 4px;
-      padding: 3px 8px;
-      font-size: 11px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    #capture-btn:hover { background: #3a4a7a; }
-    #capture-btn.capturing { color: #888; cursor: default; }
-
-    /* Rank icon buttons */
-    .rank-btn {
-      flex: 1;
-      padding: 4px 2px;
-      border: 2px solid transparent;
-      border-radius: 6px;
-      background: #1e2130;
-      cursor: pointer;
-      text-align: center;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .rank-btn:hover { border-color: #444; background: #252840; }
-    .rank-btn[data-rank="1"].active { border-color: #ff6b6b; background: #4a1010; }
-    .rank-btn[data-rank="2"].active { border-color: #ffaa44; background: #3a2a10; }
-    .rank-btn[data-rank="3"].active { border-color: #888;    background: #2a2a2a; }
-    .rank-btn[data-rank="4"].active { border-color: #88cc88; background: #1a2a1a; }
-    .rank-btn[data-rank="5"].active { border-color: #66aaff; background: #1a2a4a; }
-    .rank-btn[data-rank="6"].active { border-color: #cc88ff; background: #2a1a4a; }
-    .rank-btn { display: flex; align-items: center; justify-content: center; }
-    .rank-icon { display: block; width: 100%; height: 100%; object-fit: contain; }
-
-    /* EasyMDE dark overrides */
-    .EasyMDEContainer { font-size: 12px; }
-    .EasyMDEContainer .CodeMirror {
-      background: #0d0f18;
-      color: #ccc;
-      border: 1px solid #2a2d3a;
-      border-radius: 0 0 4px 4px;
-      font-size: 12px;
-      min-height: 180px;
-    }
-    .EasyMDEContainer .editor-toolbar {
-      background: #1a1d27;
-      border: 1px solid #2a2d3a;
-      border-bottom: none;
-      border-radius: 4px 4px 0 0;
-    }
-    .EasyMDEContainer .editor-toolbar button {
-      color: #888 !important;
-    }
-    .EasyMDEContainer .editor-toolbar button:hover,
-    .EasyMDEContainer .editor-toolbar button.active {
-      background: #252840 !important;
-      border-color: #444 !important;
-      color: #ddd !important;
-    }
-    .EasyMDEContainer .editor-toolbar i.separator { border-color: #333; }
-    .EasyMDEContainer .editor-preview {
-      background: #0d0f18;
-      color: #ccc;
-    }
-    .EasyMDEContainer .editor-preview h1 { font-size: 14px; color: #e0e0e0; }
-    .EasyMDEContainer .editor-preview h2 { font-size: 12px; color: #a0b0ff; text-transform: uppercase; letter-spacing: 0.04em; }
-    .EasyMDEContainer .editor-preview a  { color: #66aaff; }
-    .EasyMDEContainer .editor-preview p,
-    .EasyMDEContainer .editor-preview li { font-size: 12px; }
-    .EasyMDEContainer .CodeMirror-scroll { min-height: 180px; }
-    /* save button row */
-    .summary-save-row {
-      display: flex;
-      justify-content: flex-end;
-      gap: 6px;
-      margin-top: 4px;
-    }
-    .summary-btn {
-      background: #1e2130;
-      border: 1px solid #333;
-      color: #aaa;
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 11px;
-      cursor: pointer;
-    }
-    .summary-btn:hover { background: #252840; color: #ddd; }
-    .summary-btn.primary { background: #1a3a5a; border-color: #3a6a9a; color: #88bbff; }
-    .summary-btn.primary:hover { background: #2a4a6a; }
-
-    /* History refresh */
     .section-label-row {
       display: flex;
       align-items: center;
@@ -288,13 +250,126 @@
       border: none;
       color: #444;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 13px;
       padding: 0 2px;
       line-height: 1;
     }
-    .refresh-btn:hover { color: #888; }
+    .refresh-btn:hover { color: #8090b0; }
 
-    /* Toast */
+    /* ── SUMMARY: rendered view ── */
+    .summary-rendered {
+      line-height: 1.6;
+      color: #c8d0e0;
+      padding: 2px 0;
+    }
+    .summary-rendered h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e8e8f0;
+      margin: 0 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #2a2d3a;
+    }
+    .summary-rendered h2 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #8090b0;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 14px 0 5px;
+    }
+    .summary-rendered h3 { font-size: 12px; color: #b0c0d8; margin: 10px 0 4px; }
+    .summary-rendered p  { margin-bottom: 7px; font-size: 12px; }
+    .summary-rendered ul,
+    .summary-rendered ol { padding-left: 18px; margin-bottom: 7px; }
+    .summary-rendered li { font-size: 12px; margin-bottom: 3px; }
+    .summary-rendered a  { color: #66aaff; text-decoration: none; }
+    .summary-rendered a:hover { text-decoration: underline; }
+    .summary-rendered strong { color: #e0e8f8; }
+    .summary-rendered code {
+      background: #1e2130;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-family: monospace;
+      color: #a8b8d0;
+    }
+    .summary-rendered hr { border: none; border-top: 1px solid #2a2d3a; margin: 10px 0; }
+
+    /* ── SUMMARY: edit toolbar ── */
+    .summary-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .summary-btn {
+      background: #1e2130;
+      border: 1px solid #333;
+      color: #99a;
+      border-radius: 4px;
+      padding: 2px 10px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .summary-btn:hover { background: #252840; color: #ddd; }
+    .summary-btn.primary { background: #1a3a5a; border-color: #3a6a9a; color: #88bbff; }
+    .summary-btn.primary:hover { background: #2a4a6a; }
+
+    /* ── CODEMIRROR dark theme ── */
+    .CodeMirror {
+      background: #0d0f18;
+      color: #c8d0e0;
+      border: 1px solid #2a2d3a;
+      border-radius: 4px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      height: auto;
+      min-height: 160px;
+      padding: 4px 0;
+    }
+    .CodeMirror-scroll { min-height: 160px; }
+    .CodeMirror-cursor { border-left-color: #88aaff; }
+    .CodeMirror-selected { background: #2a3a5a !important; }
+    /* markdown syntax colors */
+    .cm-header   { color: #e8e8f0; font-weight: bold; }
+    .cm-header-1 { font-size: 1.1em; }
+    .cm-header-2 { color: #8090b0; font-size: 1em; }
+    .cm-strong   { color: #e0e8f8; font-weight: bold; }
+    .cm-em       { color: #c8d8a0; font-style: italic; }
+    .cm-link     { color: #66aaff; }
+    .cm-url      { color: #557799; }
+    .cm-quote    { color: #778899; font-style: italic; }
+    .cm-hr       { color: #444; }
+    .cm-tag      { color: #88bbff; }
+
+    /* ── SOURCES ── */
+    .sources-list { margin-top: 2px; }
+    .source-item {
+      padding: 5px 0;
+      border-bottom: 1px solid #1e2130;
+      font-size: 11px;
+      color: #778;
+    }
+    .source-item:last-child { border-bottom: none; }
+    .source-url { color: #66aaff; word-break: break-all; }
+    .source-url:hover { text-decoration: underline; }
+
+    /* ── HISTORY ── */
+    .history-list { margin-top: 2px; margin-bottom: 12px; }
+    .history-item {
+      padding: 5px 0;
+      border-bottom: 1px solid #1a1d27;
+      font-size: 11px;
+      color: #778;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-rank { font-weight: 700; color: #b0c0d8; }
+    .history-ts   { color: #445; font-size: 10px; }
+    .history-note { color: #889; margin-top: 2px; }
+
+    /* ── TOAST ── */
     #toast {
       position: fixed;
       bottom: 12px;
@@ -309,10 +384,11 @@
       opacity: 0;
       transition: opacity 0.3s;
       pointer-events: none;
+      z-index: 100;
+      white-space: nowrap;
     }
     #toast.show { opacity: 1; }
 
-    /* Empty / loading */
     .empty-msg { padding: 24px 16px; text-align: center; color: #555; font-size: 12px; }
   </style>
 </head>
@@ -322,11 +398,11 @@
     <button id="back-btn" title="Back to list">←</button>
     <span id="topbar-title">Map the Field</span>
     <span id="flask-status" title="Flask not reachable">●</span>
+    <span id="capture-url"></span>
     <button id="capture-btn" title="Capture current tab into this node">⬇ Capture</button>
   </div>
   <div id="toast"></div>
 
-  <!-- list toolbar — hidden when in node view -->
   <div id="list-toolbar">
     <select id="sort-select">
       <option value="unranked">Unranked first</option>
