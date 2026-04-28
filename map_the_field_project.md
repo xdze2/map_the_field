@@ -36,12 +36,39 @@ data/nodes/{node_id}/
   sources/              ← raw captured data
     {hash}_{slug}_{timestamp}.md    ← captured page as markdown
     {hash}_{slug}_{timestamp}.json  ← fetch metadata (url, captured_at, status)
-  triage.jsonl          ← append-only rank history — precious
+  triage.jsonl          ← append-only event log — precious
 ```
 
 Source status values: `good | dubious | discarded`
 
-`triage.jsonl` entry schema: `{timestamp, rank, note}` — `note` is optional, one line max, captures the decision rationale at the moment of ranking. Full research notes live in the summary markdown.
+### Structured fields via YAML frontmatter
+
+Summary files carry a **YAML frontmatter block** as their authoritative source for structured fields:
+
+```markdown
+---
+name: Acme Corp
+type: company
+siren: 123456789
+url: https://acme.fr
+company_type: product-company
+tags: NLP, open-source
+commute_km: 8.2
+---
+
+Free-text summary content...
+```
+
+Fields are **schemaless** — any key can be added at any time without migration. Flask parses the frontmatter on every summary save and merges the extracted fields into `index.jsonl`. `meta.json` is no longer the source of truth for structured fields.
+
+The node view displays frontmatter fields as a key-value box above the rendered summary text. The editor (CodeMirror with `yaml-frontmatter` mode) highlights the `---` block with YAML syntax.
+
+### triage.jsonl event log
+
+`triage.jsonl` is an append-only log of all significant events on a node. Two entry types:
+
+- **Rank change:** `{timestamp, rank, note}` — `note` is optional, one line max
+- **Summary edit:** `{timestamp, action: "summary", author}` — logged on every summary save
 
 `node_id` convention:
 - `siren{number}` for French companies (e.g. `siren352187900`)
@@ -50,7 +77,7 @@ Source status values: `good | dubious | discarded`
 Global index (Flask reads this to serve the list view without scanning all folders):
 
 ```
-data/nodes/index.jsonl  ← one line per node: id, name, type, current_rank, updated_at
+data/nodes/index.jsonl  ← one line per node: id, name, type, current_rank, updated_at, ...frontmatter fields
 ```
 
 ### What is precious vs. derived
@@ -58,10 +85,10 @@ data/nodes/index.jsonl  ← one line per node: id, name, type, current_rank, upd
 | File | Status | Notes |
 |---|---|---|
 | `triage.jsonl` | **Precious** | Append-only, never overwrite |
-| `summary_history/` | **Precious** | Never delete; latest file = current summary |
+| `summary_history/` | **Precious** | Never delete; latest file = current summary + source of truth for structured fields |
 | `sources/` | **Precious** | Captured raw data |
-| `meta.json` | Derived | Populated from SIREN + user input |
-| `index.jsonl` | Derived | Recomputable from node folders |
+| `meta.json` | Derived | Populated from SIREN bootstrap; structured fields now live in summary frontmatter |
+| `index.jsonl` | Derived | Recomputable from node folders; mirrors frontmatter fields for fast list queries |
 
 ---
 
@@ -149,7 +176,7 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
   - Free text and URLs live here — no separate notes field
 - **Sources:** list of files in `sources/` with status (good / dubious / discarded)
 - **Rank:** 6 icon buttons (images from `tools/assets/%d_*.png`), pinned to bottom bar; current rank highlighted; appends to `triage.jsonl`
-- **History:** collapsible timeline merging rank changes (from `triage.jsonl`) and summary saves (from `summary_history/` filenames), in chronological order
+- **History:** timeline of events from `triage.jsonl`: rank changes and summary edits, in reverse chronological order
 - **"Generate summary" button:** manual trigger only — no auto LLM calls
 
 ---
@@ -175,6 +202,8 @@ Flask is the data brain — the extension is a thin UI. All data lives as files 
 - Rank buttons: icon images (`tools/assets/%d_*.png`), in bottom bar
 - Prev/Next navigation: ordered by current list sort, big buttons in bottom bar
 - Capture button: saves focused tab as markdown via content script
+- YAML frontmatter in summary files: structured fields editable inline, synced to `index.jsonl` on save, displayed as key-value box in node view
+- `triage.jsonl` extended to log summary edits alongside rank changes
 
 ## Phase 2 (later)
 
