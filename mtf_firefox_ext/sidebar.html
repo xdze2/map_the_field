@@ -117,7 +117,7 @@
         align-items: center;
         gap: 6px;
         padding: 5px 8px;
-        background: #000;
+        background: #202020;
         border-bottom: 1px solid #333;
         flex-shrink: 0;
       }
@@ -154,7 +154,7 @@
         flex-direction: column;
         flex-shrink: 0;
         border-top: 1px solid #333;
-        background: #181717;
+        background: #202020;
       }
       #rank-bar {
         display: flex;
@@ -253,13 +253,13 @@
       }
       .rank-btn.active {
         border-color: #fff;
-        background-color: #cccccc;
+        background-color: #2a2a2a;
       }
       .rank-btn.active .rank-num {
         color: #fff;
       }
       .rank-btn.active .rank-label {
-        color: #aaa;
+        color: #ccc;
       }
 
       /* ── NODE ROW (list) ── */
@@ -458,8 +458,8 @@
 
       /* ── CODEMIRROR terminal theme ── */
       .CodeMirror {
-        background: #c0c0c0;
-        color: #ccc;
+        background: #111;
+        color: #ddd;
         border: 1px solid #333;
         font-family: monospace;
         font-size: 12px;
@@ -477,41 +477,27 @@
       .CodeMirror-selected {
         background: #222 !important;
       }
-      .cm-header {
-        color: #fff;
-        font-weight: bold;
-      }
-      .cm-header-1 {
-        font-size: 1.1em;
-      }
-      .cm-header-2 {
-        color: #aaa;
-        font-size: 1em;
-      }
-      .cm-strong {
-        color: #fff;
-        font-weight: bold;
-      }
-      .cm-em {
-        color: #aaa;
-        font-style: italic;
-      }
-      .cm-link {
-        color: #6af;
-      }
-      .cm-url {
-        color: #448;
-      }
-      .cm-quote {
-        color: #666;
-        font-style: italic;
-      }
-      .cm-hr {
-        color: #333;
-      }
-      .cm-tag {
-        color: #aaa;
-      }
+      .cm-s-default .cm-header   { color: #fff; font-weight: bold; }
+      .cm-s-default .cm-header-1 { font-size: 1.1em; }
+      .cm-s-default .cm-header-2 { color: #bbb; }
+      .cm-s-default .cm-strong   { color: #fff; font-weight: bold; }
+      .cm-s-default .cm-em       { color: #bbb; font-style: italic; }
+      .cm-s-default .cm-link     { color: #6af; text-decoration: none; }
+      .cm-s-default .cm-url      { color: #6af; }
+      .cm-s-default .cm-quote    { color: #777; font-style: italic; }
+      .cm-s-default .cm-hr       { color: #444; }
+      .cm-s-default .cm-keyword  { color: #ddd; }
+      .cm-s-default .cm-atom     { color: #ddd; }
+      .cm-s-default .cm-number   { color: #ddd; }
+      .cm-s-default .cm-def      { color: #ddd; }
+      .cm-s-default .cm-variable-2 { color: #ddd; }
+      .cm-s-default .cm-comment  { color: #666; }
+      .cm-s-default .cm-string   { color: #ddd; }
+      .cm-s-default .cm-string-2 { color: #ddd; }
+      .cm-s-default .cm-meta     { color: #888; }
+      .cm-s-default .cm-tag      { color: #bbb; }
+      .cm-s-default .cm-attribute { color: #ddd; }
+      .cm-s-default .cm-error    { color: #f66; }
 
       /* ── SOURCES ── */
       .sources-list {
@@ -555,11 +541,11 @@
         color: #aaa;
       }
       .history-ts {
-        color: #cccccc;
+        color: #444;
         font-size: 10px;
       }
       .history-note {
-        color: #d3d3d3;
+        color: #888;
         margin-top: 2px;
       }
 
