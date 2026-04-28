@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
+
 import trafilatura
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -64,6 +66,21 @@ def web_ui_cm_css():
 @app.route("/codemirror-markdown.min.js")
 def web_ui_cm_md():
     return send_from_directory(EXT_DIR, "codemirror-markdown.min.js")
+
+
+@app.route("/codemirror-yaml.min.js")
+def web_ui_cm_yaml():
+    return send_from_directory(EXT_DIR, "codemirror-yaml.min.js")
+
+
+@app.route("/codemirror-overlay.min.js")
+def web_ui_cm_overlay():
+    return send_from_directory(EXT_DIR, "codemirror-overlay.min.js")
+
+
+@app.route("/codemirror-yaml-frontmatter.min.js")
+def web_ui_cm_yaml_fm():
+    return send_from_directory(EXT_DIR, "codemirror-yaml-frontmatter.min.js")
 
 
 @app.route("/<filename>.png")
@@ -173,7 +190,11 @@ def node_summary(node_id):
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     filename = f"summary_{ts}_{author}.md"
     (node_dir / "summary_history" / filename).write_text(content, encoding="utf-8")
-    _update_index_entry(node_id, updated_at=ts)
+    triage_entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "action": "summary", "author": author}
+    with open(node_dir / "triage.jsonl", "a") as f:
+        f.write(json.dumps(triage_entry, ensure_ascii=False) + "\n")
+    frontmatter = _parse_frontmatter(content)
+    _update_index_entry(node_id, updated_at=ts, **frontmatter)
     return jsonify({"ok": True, "file": filename})
 
 
@@ -227,7 +248,18 @@ def node_history(node_id):
     return jsonify({"triage": triage_entries, "current_rank": current_rank, "sources": sources})
 
 
-def _update_index_entry(node_id, current_rank=None, updated_at=None):
+def _parse_frontmatter(content):
+    m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", content, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        data = yaml.safe_load(m.group(1))
+        return data if isinstance(data, dict) else {}
+    except yaml.YAMLError:
+        return {}
+
+
+def _update_index_entry(node_id, current_rank=None, updated_at=None, **fields):
     if not INDEX_FILE.exists():
         return
     lines = INDEX_FILE.read_text().splitlines()
@@ -242,6 +274,7 @@ def _update_index_entry(node_id, current_rank=None, updated_at=None):
                 entry["current_rank"] = current_rank
             if updated_at is not None:
                 entry["updated_at"] = updated_at
+            entry.update(fields)
         new_lines.append(json.dumps(entry, ensure_ascii=False))
     INDEX_FILE.write_text("\n".join(new_lines) + "\n")
 

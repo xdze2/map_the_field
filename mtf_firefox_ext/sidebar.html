@@ -6,6 +6,9 @@
     <link rel="stylesheet" href="codemirror.min.css" />
     <script src="codemirror.min.js"></script>
     <script src="codemirror-markdown.min.js"></script>
+    <script src="codemirror-yaml.min.js"></script>
+    <script src="codemirror-overlay.min.js"></script>
+    <script src="codemirror-yaml-frontmatter.min.js"></script>
     <script src="marked.min.js"></script>
     <style>
       * {
@@ -427,6 +430,30 @@
         margin: 8px 0;
       }
 
+      /* ── FRONTMATTER fields box ── */
+      .frontmatter-box {
+        border: 1px solid #2a2a2a;
+        background: #111;
+        padding: 5px 8px;
+        margin-bottom: 8px;
+        font-size: 11px;
+        font-family: monospace;
+      }
+      .frontmatter-row {
+        display: flex;
+        gap: 8px;
+        padding: 1px 0;
+      }
+      .frontmatter-key {
+        color: #9ab;
+        flex-shrink: 0;
+        min-width: 80px;
+      }
+      .frontmatter-key::after { content: ":"; }
+      .frontmatter-val {
+        color: #ccc;
+      }
+
       /* ── SUMMARY: edit toolbar ── */
       .summary-toolbar {
         display: flex;
@@ -499,6 +526,10 @@
       .cm-s-default .cm-attribute { color: #ddd; }
       .cm-s-default .cm-error    { color: #f66; }
 
+      /* YAML frontmatter block */
+      .cm-s-default .cm-def      { color: #9ab; }
+      .cm-yaml-frontmatter-delim { color: #555; font-weight: bold; }
+
       /* ── SOURCES ── */
       .sources-list {
         margin-top: 2px;
@@ -539,6 +570,10 @@
       .history-rank {
         font-weight: 700;
         color: #aaa;
+      }
+      .history-action {
+        color: #666;
+        font-style: italic;
       }
       .history-ts {
         color: #444;

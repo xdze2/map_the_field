@@ -236,7 +236,11 @@ function renderNode(data) {
 
   // rendered view (default)
   const rendered = el("div", "summary-rendered");
-  rendered.innerHTML = renderMarkdown(summary_md);
+  const fmBlock = renderFrontmatterBlock(summary_md || "");
+  if (fmBlock) rendered.appendChild(fmBlock);
+  const bodyDiv = el("div", "");
+  bodyDiv.innerHTML = renderMarkdown(summary_md);
+  rendered.appendChild(bodyDiv);
   container.appendChild(rendered);
 
   // hidden textarea for CodeMirror to attach to
@@ -255,7 +259,7 @@ function renderNode(data) {
       saveBtn.style.display = "block";
       inEditMode = true;
       cmEditor = CodeMirror.fromTextArea(textarea, {
-        mode: "markdown",
+        mode: "yaml-frontmatter",
         theme: "default",   // we override all colors via CSS
         lineWrapping: true,
         autofocus: true,
@@ -326,7 +330,10 @@ function buildHistoryEntries(triage, container) {
   for (const entry of [...triage].reverse()) {
     const item = el("div", "history-item");
     const top = el("div", "");
-    if (entry.rank) {
+    if (entry.action === "summary") {
+      top.appendChild(el("span", "history-action", `summary edit (${entry.author || "user"})`));
+      top.appendChild(document.createTextNode("  "));
+    } else if (entry.rank) {
       top.appendChild(el("span", "history-rank", `${entry.rank} — ${RANK_LABELS[entry.rank]}`));
       top.appendChild(document.createTextNode("  "));
     }
@@ -398,7 +405,12 @@ async function postSummary(content, saveBtn, renderedEl, editBtn) {
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     // switch back to render
-    renderedEl.innerHTML = renderMarkdown(content);
+    renderedEl.innerHTML = "";
+    const fmBlock = renderFrontmatterBlock(content);
+    if (fmBlock) renderedEl.appendChild(fmBlock);
+    const bodyDiv = el("div", "");
+    bodyDiv.innerHTML = renderMarkdown(content);
+    renderedEl.appendChild(bodyDiv);
     destroyEditor();
     document.getElementById("summary-textarea").style.display = "none";
     renderedEl.style.display = "block";
@@ -442,13 +454,44 @@ async function captureCurrentTab() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function stripFrontmatter(md) {
+  return md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+}
+
+function parseFrontmatter(md) {
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (!m) return {};
+  const fields = {};
+  for (const line of m[1].split("\n")) {
+    const sep = line.indexOf(":");
+    if (sep < 1) continue;
+    fields[line.slice(0, sep).trim()] = line.slice(sep + 1).trim();
+  }
+  return fields;
+}
+
+function renderFrontmatterBlock(md) {
+  const fields = parseFrontmatter(md);
+  const entries = Object.entries(fields);
+  if (entries.length === 0) return null;
+  const box = el("div", "frontmatter-box");
+  for (const [k, v] of entries) {
+    const row = el("div", "frontmatter-row");
+    row.appendChild(el("span", "frontmatter-key", k));
+    row.appendChild(el("span", "frontmatter-val", v));
+    box.appendChild(row);
+  }
+  return box;
+}
+
 function renderMarkdown(md) {
   if (!md) return "<em style='color:#445'>No summary yet.</em>";
+  const body = stripFrontmatter(md);
   if (typeof marked !== "undefined") {
-    const html = marked.parse(md, { async: false });
+    const html = marked.parse(body, { async: false });
     if (typeof html === "string") return html;
   }
-  return md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
+  return body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
 }
 
 function el(tag, className, text) {
