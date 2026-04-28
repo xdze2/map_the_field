@@ -2,6 +2,7 @@
 """Shared utilities for company research tools."""
 import csv
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -56,8 +57,16 @@ DIRECTORY_BLACKLIST = {
 }
 
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def now_ts() -> str:
+    """Compact UTC timestamp for filenames: 20260428T120000Z"""
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
 def slugify(text: str) -> str:
-    """Convert text to URL-friendly slug."""
     slug = re.sub(r"[^\w\s-]", "", text.lower())
     slug = re.sub(r"[-\s]+", "-", slug)
     return slug.strip("-")

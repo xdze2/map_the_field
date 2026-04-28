@@ -28,6 +28,12 @@ docs/
 - Data access goes through an **interface object** (load / save / search) — no direct file I/O scattered across scripts
 - Activate `venv/` from the project root before running any script
 
+## Conventions
+
+- All timestamps stored as **UTC ISO format** (`datetime.now(timezone.utc).isoformat()`)
+- All file reads and writes use `encoding="utf-8"` explicitly
+- Use **Pathlib** for all file paths — no `os.path`
+
 ## Backlog
 
 Design notes and future work in `backlog/`:

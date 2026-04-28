@@ -14,16 +14,16 @@ Usage:
 
 import argparse
 import json
-import re
-import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 SIRENE_DIR = ROOT / "data/company_data/sirene_searches"
 DDG_DIR = ROOT / "data/company_data/ddg_searches"
-NODES_DIR = ROOT / "data/nodes"
-INDEX_FILE = NODES_DIR / "index.jsonl"
+
+import backend_app.node_store as node_store
+from backend_app.utils import slugify, now_iso, now_ts
+
+NODES_DIR = node_store.NODES_DIR
 
 NAF_LABELS = {
     "62.01Z": "Programmation informatique",
@@ -37,16 +37,6 @@ NAF_LABELS = {
     "72.20Z": "Recherche-développement en sciences humaines et sociales",
     "85.59B": "Autres enseignements",
 }
-
-
-def slugify(name: str) -> str:
-    s = name.lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s)
-    return s.strip("-")[:50]
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def tranche_label(code: str | None) -> str | None:
@@ -174,46 +164,11 @@ def bootstrap_node(record: dict, dry_run: bool) -> tuple[str, str]:
 
     ddg = load_ddg(record["siren"])
     summary = build_summary(record, ddg)
-    ts = now_iso()
+    ts = now_ts()
     summary_file = node_dir / "summary_history" / f"summary_{ts}_siren_bootstrap.md"
     summary_file.write_text(summary)
 
     return node_id, "created"
-
-
-def rebuild_index(dry_run: bool) -> list[dict]:
-    entries = []
-    for meta_file in sorted(NODES_DIR.glob("*/meta.json")):
-        meta = json.loads(meta_file.read_text())
-        node_dir = meta_file.parent
-
-        # current rank: last entry in triage.jsonl
-        triage_file = node_dir / "triage.jsonl"
-        current_rank = None
-        if triage_file.exists():
-            lines = [l for l in triage_file.read_text().splitlines() if l.strip()]
-            if lines:
-                current_rank = json.loads(lines[-1]).get("rank")
-
-        # last updated: latest summary timestamp or meta created_at
-        summaries = sorted((node_dir / "summary_history").glob("summary_*.md"))
-        updated_at = summaries[-1].stem.split("_")[1] if summaries else meta.get("created_at", "")
-
-        entries.append({
-            "node_id": meta["node_id"],
-            "name": meta["name"],
-            "type": meta["type"],
-            "current_rank": current_rank,
-            "updated_at": updated_at,
-        })
-
-    if not dry_run:
-        NODES_DIR.mkdir(parents=True, exist_ok=True)
-        with open(INDEX_FILE, "w") as f:
-            for entry in entries:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    return entries
 
 
 def main():
@@ -248,7 +203,7 @@ def main():
     print(f"\n{created} nodes created, {skipped} skipped (already exist)")
 
     if not args.dry_run:
-        entries = rebuild_index(dry_run=False)
+        entries = node_store.rebuild_index()
         print(f"index.jsonl updated — {len(entries)} nodes")
     else:
         print("[dry-run] index.jsonl not written")
