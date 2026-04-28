@@ -21,26 +21,6 @@ See also: `backlog/firefox_extension_poc.md` for architecture decisions and opti
 | `sidebar.js` | Sidebar logic — tabs API, Flask fetch |
 | `icon.svg` | Extension icon |
 
-## Dev setup
-
-**Launch dedicated Firefox profile** (profile dir must exist first):
-```bash
-mkdir -p ~/.mozilla/firefox/map_the_field
-firefox --profile ~/.mozilla/firefox/map_the_field --no-remote
-```
-`--no-remote` forces a new window even if Firefox is already open. Keep this instance separate from normal browsing — extension is installed here only.
-
-**Load extension:**
-1. `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`
-2. Sidebar: View → Sidebar → Map the Field
-3. To reload after code changes: `about:debugging` → Reload button
-
-**Flask backend:**
-```bash
-source tools/venv/bin/activate
-python tools/screening_app.py
-```
-Must be running for the ping button to work. CORS is set to `*` in `after_request` hook.
 
 ## Key technical notes
 

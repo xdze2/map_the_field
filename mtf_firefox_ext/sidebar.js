@@ -212,12 +212,9 @@ function renderNode(data) {
     const btn = el("button", "rank-btn" + (current_rank === i ? " active" : ""));
     btn.dataset.rank = i;
     btn.title = `${i} — ${RANK_LABELS[i]}`;
-    const img = document.createElement("img");
-    img.src = RANK_ICONS[i];
-    img.alt = RANK_LABELS[i];
-    img.className = "rank-icon";
+    const num = el("span", "rank-num", String(i));
     const lbl = el("span", "rank-label", RANK_LABELS[i]);
-    btn.append(img, lbl);
+    btn.append(num, lbl);
     btn.addEventListener("click", () => postRank(i, btn, rankBar));
     rankBar.appendChild(btn);
   }
