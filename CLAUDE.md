@@ -8,13 +8,25 @@ One folder per node (`data/nodes/{node_id}/`): summary with YAML frontmatter, so
 
 Node fields live in the **YAML frontmatter** of the latest summary file. `index.jsonl` is kept in sync by Flask on every summary save. Fields are schemaless — add any key at any time. See [backlog/structured_node_fields.md](backlog/structured_node_fields.md).
 
-## Python scripts (`tools/`)
+## Project layout
+
+```
+backend_app/      # Flask app + node_store library
+pipeline_siren/   # SIREN data ingestion scripts
+firefox_ext/      # Firefox sidebar extension
+data/             # node folders + index.jsonl
+docs/
+```
+
+`venv/` and `requirements.txt` are at the project root.
+
+## Python scripts
 
 - Use **Click** for all CLI interfaces
 - Design for **idempotence**: running twice produces the same result
 - Each script has a clearly identified input and output
 - Data access goes through an **interface object** (load / save / search) — no direct file I/O scattered across scripts
-- All scripts require `tools/venv/` activated
+- Activate `venv/` from the project root before running any script
 
 ## Backlog
 

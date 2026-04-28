@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from ddgs import DDGS
-from utils import (
+from backend.utils import (
     slugify,
     domain_name_blacklist,
     load_naf_descriptions,
@@ -93,7 +93,11 @@ def filter_results(results: list) -> tuple:
 
 def already_searched(siren: str) -> bool:
     """Return True if a DDG result file already exists for this SIREN."""
-    return bool(list(DDG_SEARCHES_DIR.glob(f"ddg_search_{siren}_*.json"))) if DDG_SEARCHES_DIR.exists() else False
+    return (
+        bool(list(DDG_SEARCHES_DIR.glob(f"ddg_search_{siren}_*.json")))
+        if DDG_SEARCHES_DIR.exists()
+        else False
+    )
 
 
 def save_ddg_results(siren: str, company_name: str, search_data: dict) -> None:
@@ -170,7 +174,9 @@ def print_candidates(company_name: str, siren: str, candidates: list):
     default=True,
     help="Skip SIRENs that already have a DDG result file (default: on)",
 )
-def search(siren: str, show_all: bool, max_results: int, region: str, skip_existing: bool):
+def search(
+    siren: str, show_all: bool, max_results: int, region: str, skip_existing: bool
+):
     """Search for a company website by SIREN.
 
     Looks up company in local downloads, then searches for website using postal code + company name.

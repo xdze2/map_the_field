@@ -1,0 +1,29 @@
+[project]
+name = "map-the-field"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.0",
+    "requests>=2.28",
+    "pyyaml>=6.0",
+    "ddgs>=4.0",
+    "flask>=3.0",
+    "trafilatura>=2.0",
+]
+
+[project.scripts]
+mtf-app        = "backend_app.screening_app:main"
+mtf-bootstrap  = "pipeline_siren.bootstrap_nodes:cli"
+mtf-download   = "pipeline_siren.download_entreprises:cli"
+mtf-search-ddg = "pipeline_siren.search_duckduckgo:cli"
+mtf-search-cities = "pipeline_siren.search_cities:cli"
+mtf-wikidata   = "pipeline_siren.search_siren_wikidata:cli"
+mtf-view       = "pipeline_siren.view_entreprises:cli"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend_app*", "pipeline_siren*"]

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 import yaml
-from utils import load_naf_descriptions, get_naf_description
+from backend.utils import load_naf_descriptions, get_naf_description
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
@@ -45,7 +45,6 @@ TYPE: <product-company|esn-consulting|research-lab|association|public-sector|unc
 KEYWORDS: <tag1, tag2, tag3>
 SUMMARY: <1-3 sentences>
 """
-
 
 
 def load_ddg_file(path: Path) -> dict:
@@ -145,7 +144,13 @@ def parse_response(text: str) -> tuple[str, str, str, str, str]:
     """Parse BEST_URL / CONFIDENCE / TYPE / KEYWORDS / SUMMARY from model output."""
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    best_url, confidence, company_type, keywords, summary = "NONE", "weak", "unclear", "", ""
+    best_url, confidence, company_type, keywords, summary = (
+        "NONE",
+        "weak",
+        "unclear",
+        "",
+        "",
+    )
     for line in text.strip().splitlines():
         line = line.strip()
         if line.startswith("BEST_URL:"):
@@ -156,7 +161,14 @@ def parse_response(text: str) -> tuple[str, str, str, str, str]:
                 confidence = raw
         elif line.startswith("TYPE:"):
             raw = line.split(":", 1)[1].strip().lower()
-            valid = ("product-company", "esn-consulting", "research-lab", "association", "public-sector", "unclear")
+            valid = (
+                "product-company",
+                "esn-consulting",
+                "research-lab",
+                "association",
+                "public-sector",
+                "unclear",
+            )
             company_type = raw if raw in valid else "unclear"
         elif line.startswith("KEYWORDS:"):
             keywords = line.split(":", 1)[1].strip()
@@ -208,8 +220,13 @@ def save_summary_yaml(
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
     grp_size = (official_data.get("size_category") or "").lower() or "unk"
-    city = (official_data.get("location", {}).get("city") or "").lower().replace(" ", "-") or "unk"
-    filepath = SUMMARIES_DIR / f"{siren}_{slug}_{grp_size}_{city}_{confidence}_{timestamp}.yaml"
+    city = (official_data.get("location", {}).get("city") or "").lower().replace(
+        " ", "-"
+    ) or "unk"
+    filepath = (
+        SUMMARIES_DIR
+        / f"{siren}_{slug}_{grp_size}_{city}_{confidence}_{timestamp}.yaml"
+    )
 
     yaml_data = {
         "meta": {
@@ -226,7 +243,9 @@ def save_summary_yaml(
             "naf_code": official_data.get("activity", {}).get("code"),
             "naf_label": official_data.get("activity", {}).get("description"),
             "is_ess": official_data.get("legal_status", {}).get("is_ess"),
-            "is_association": official_data.get("legal_status", {}).get("is_association"),
+            "is_association": official_data.get("legal_status", {}).get(
+                "is_association"
+            ),
         },
         "summary": {
             "confidence": confidence,
@@ -251,7 +270,11 @@ def save_summary_yaml(
 
 
 def already_summarized(siren: str) -> bool:
-    return bool(list(SUMMARIES_DIR.glob(f"{siren}_*.yaml"))) if SUMMARIES_DIR.exists() else False
+    return (
+        bool(list(SUMMARIES_DIR.glob(f"{siren}_*.yaml")))
+        if SUMMARIES_DIR.exists()
+        else False
+    )
 
 
 @click.command()
@@ -270,9 +293,13 @@ def already_summarized(siren: str) -> bool:
     default=True,
     help="Skip SIRENs that already have a summary YAML",
 )
-@click.option("--all", "process_all", is_flag=True, help="Process all files in ddg_searches/")
+@click.option(
+    "--all", "process_all", is_flag=True, help="Process all files in ddg_searches/"
+)
 @click.argument("sirens", nargs=-1)
-def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all, sirens):
+def validate(
+    provider, model, llamacpp_url, skip_existing, dry_run, process_all, sirens
+):
     """Build company summary cards from DDG search results using a local LLM.
 
     Pass SIREN numbers to process specific companies, or use --all to process
@@ -297,7 +324,9 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all,
             else:
                 files.append(matches[-1])
     else:
-        click.echo("Provide SIREN numbers or use --all to process every DDG file.", err=True)
+        click.echo(
+            "Provide SIREN numbers or use --all to process every DDG file.", err=True
+        )
         raise SystemExit(1)
 
     click.echo(f"Found {len(files)} DDG file(s) to process.", err=True)
@@ -338,7 +367,10 @@ def validate(provider, model, llamacpp_url, skip_existing, dry_run, process_all,
         elapsed_s = time.perf_counter() - t0
 
         best_url, confidence, company_type, keywords, summary = parse_response(raw)
-        click.echo(f"  → {confidence.upper():8s}  [{company_type}]  {elapsed_s:.1f}s  {summary[:60]}", err=True)
+        click.echo(
+            f"  → {confidence.upper():8s}  [{company_type}]  {elapsed_s:.1f}s  {summary[:60]}",
+            err=True,
+        )
 
         official_data = extract_official_data(company_info, naf_map)
         yaml_path = save_summary_yaml(

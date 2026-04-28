@@ -5,7 +5,7 @@ import requests
 import yaml
 from datetime import datetime
 from pathlib import Path
-from utils import slugify
+from backend.utils import slugify
 
 SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
 
@@ -75,7 +75,9 @@ def save_results(siren: str, slug: str, page_title: str, data: dict) -> None:
     stem = f"{siren}_{slug}_{page_title}"
 
     yaml_path = WIKIDATA_DIR / f"{stem}.yaml"
-    yaml_path.write_text(yaml.dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    yaml_path.write_text(
+        yaml.dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
     click.echo(f"Saved {yaml_path}", err=True)
 
     thumbnail_url = data.get("thumbnail")

@@ -1,0 +1,8 @@
+[console_scripts]
+mtf-app = backend_app.screening_app:main
+mtf-bootstrap = pipeline_siren.bootstrap_nodes:cli
+mtf-download = pipeline_siren.download_entreprises:cli
+mtf-search-cities = pipeline_siren.search_cities:cli
+mtf-search-ddg = pipeline_siren.search_duckduckgo:cli
+mtf-view = pipeline_siren.view_entreprises:cli
+mtf-wikidata = pipeline_siren.search_siren_wikidata:cli

@@ -8,15 +8,21 @@ See [map_the_field_project.md](map_the_field_project.md) for the full project de
 
 ## What's here
 
-- `tools/` — Python scripts to download and explore SIREN data
+- `backend_app/` — Flask app + node store library
+- `pipeline_siren/` — scripts to download and explore SIREN data
+- `firefox_ext/` — Firefox sidebar for browsing and ranking nodes
 - `data/nodes/` — one folder per tracked company/org/project
-- `extension/` — Firefox sidebar for browsing and ranking nodes
 - `backlog/` — design notes and future improvements
 
 
 ## Usage
 
-
+**Setup:**
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+```
 
 **Launch dedicated Firefox profile** (profile dir must exist first):
 ```bash
@@ -26,13 +32,13 @@ firefox --profile ~/.mozilla/firefox/map_the_field --no-remote
 `--no-remote` forces a new window even if Firefox is already open. Keep this instance separate from normal browsing — extension is installed here only.
 
 **Load extension:**
-1. `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`
+1. `about:debugging` → This Firefox → Load Temporary Add-on → select `firefox_ext/manifest.json`
 2. Sidebar: View → Sidebar → Map the Field
 3. To reload after code changes: `about:debugging` → Reload button
 
 **Flask backend:**
 ```bash
-source tools/venv/bin/activate
-python tools/screening_app.py
+source venv/bin/activate
+mtf-app
 ```
 Must be running for the ping button to work. CORS is set to `*` in `after_request` hook.

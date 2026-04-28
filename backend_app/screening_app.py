@@ -1,6 +1,6 @@
 """
 Map the Field — Flask backend.
-Usage: python tools/screening_app.py
+Usage: mtf-app  (or: python backend_app/screening_app.py)
 """
 
 import hashlib
@@ -16,7 +16,7 @@ import trafilatura
 from flask import Flask, jsonify, request, send_from_directory
 
 ASSETS_DIR     = Path(__file__).parent / "assets"
-EXT_DIR        = Path(__file__).parent.parent / "mtf_firefox_ext"
+EXT_DIR        = Path(__file__).parent.parent / "firefox_ext"
 NODES_DIR      = Path(__file__).parent.parent / "data/nodes"
 INDEX_FILE     = NODES_DIR / "index.jsonl"
 
@@ -279,7 +279,11 @@ def _update_index_entry(node_id, current_rank=None, updated_at=None, **fields):
     INDEX_FILE.write_text("\n".join(new_lines) + "\n")
 
 
-if __name__ == "__main__":
+def main():
     print(f"Nodes dir: {NODES_DIR}")
     print("Web UI: http://localhost:5001/")
     app.run(debug=True, port=5001)
+
+
+if __name__ == "__main__":
+    main()
